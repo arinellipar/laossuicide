@@ -315,3 +315,65 @@ model PaymentMethod {
   @@index([userId])
   @@index([stripePaymentMethodId])
 }
+
+// prisma/schema.prisma - Adicionar ao schema existente
+
+model Track {
+  id       String  @id @default(cuid())
+  title    String
+  artist   String  @default("LAOS")
+  duration Int // duração em segundos
+  fileUrl  String? // URL do arquivo no Supabase Storage
+  fileSize Int? // tamanho do arquivo em bytes
+  mimeType String  @default("audio/mpeg")
+
+  // Metadados adicionais
+  album String?
+  genre String?
+  bpm   Int?
+  key   String?
+
+  // Visualização
+  waveformData Json? // dados pré-processados da forma de onda
+  thumbnailUrl String?
+
+  // Controle
+  isPublic  Boolean @default(false)
+  playCount Int     @default(0)
+
+  // Relacionamentos
+  playlists PlaylistTrack[]
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([artist])
+  @@index([isPublic])
+}
+
+model Playlist {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  isPublic    Boolean @default(false)
+
+  tracks PlaylistTrack[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PlaylistTrack {
+  id         String @id @default(cuid())
+  playlistId String
+  trackId    String
+  order      Int
+
+  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, trackId])
+  @@index([playlistId])
+  @@index([trackId])
+}
