@@ -1,0 +1,317 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum ProductType {
+  MERCHANDISE
+  TICKET
+}
+
+enum TicketType {
+  GENERAL
+  VIP
+  BACKSTAGE
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  emailVerified  Boolean  @default(false)
+  hashedPassword String?
+  role           UserRole @default(USER)
+
+  // Profile Information
+  firstName   String?
+  lastName    String?
+  displayName String?
+  avatarUrl   String?
+  phoneNumber String?
+
+  // Authentication
+  sessions                Session[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+
+  // Commerce
+  orders         Order[]
+  addresses      Address[]
+  paymentMethods PaymentMethod[]
+
+  // Metadata
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
+  loginCount  Int       @default(0)
+
+  @@index([email])
+  @@index([role])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+}
+
+model Product {
+  id          String      @id @default(cuid())
+  name        String
+  slug        String      @unique
+  description String
+  type        ProductType
+
+  // Pricing
+  price         Decimal @db.Decimal(10, 2)
+  currency      String  @default("BRL")
+  stripePriceId String?
+
+  // Inventory
+  stock         Int @default(0)
+  lowStockAlert Int @default(10)
+
+  // Media
+  images ProductImage[]
+
+  // Merchandise Specific
+  sizes  String[] @default([])
+  colors String[] @default([])
+
+  // Ticket Specific
+  eventId    String?
+  event      Event?      @relation(fields: [eventId], references: [id])
+  ticketType TicketType?
+
+  // Relations
+  orderItems OrderItem[]
+
+  // Metadata
+  active    Boolean  @default(true)
+  featured  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+  @@index([type])
+  @@index([eventId])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  order     Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+}
+
+model Event {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+
+  // Location
+  venue   String
+  city    String
+  state   String?
+  country String
+  address String?
+
+  // Timing
+  startDate DateTime
+  endDate   DateTime?
+  doorsOpen DateTime?
+
+  // Capacity
+  totalCapacity Int
+  soldTickets   Int @default(0)
+
+  // Relations
+  products Product[]
+
+  // Metadata
+  active    Boolean  @default(true)
+  featured  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+  @@index([startDate])
+}
+
+model Order {
+  id          String @id @default(cuid())
+  orderNumber String @unique @default(cuid())
+  userId      String
+  user        User   @relation(fields: [userId], references: [id])
+
+  // Pricing
+  subtotal Decimal @db.Decimal(10, 2)
+  tax      Decimal @db.Decimal(10, 2)
+  shipping Decimal @db.Decimal(10, 2)
+  total    Decimal @db.Decimal(10, 2)
+  currency String  @default("BRL")
+
+  // Status
+  status OrderStatus @default(PENDING)
+
+  // Shipping
+  shippingAddressId String?
+  shippingAddress   Address? @relation(fields: [shippingAddressId], references: [id])
+  trackingNumber    String?
+
+  // Payment
+  stripePaymentIntentId   String?        @unique
+  stripeCheckoutSessionId String?        @unique
+  paymentMethodId         String?
+  paymentMethod           PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+
+  // Items
+  items OrderItem[]
+
+  // Metadata
+  notes       String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+  cancelledAt DateTime?
+
+  @@index([orderNumber])
+  @@index([userId])
+  @@index([status])
+  @@index([stripePaymentIntentId])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  // Details
+  quantity Int
+  price    Decimal @db.Decimal(10, 2)
+
+  // Merchandise Options
+  size  String?
+  color String?
+
+  // Ticket Details
+  ticketCode String? @unique
+  qrCode     String?
+
+  // Metadata
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([ticketCode])
+}
+
+model Address {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Address Details
+  name       String
+  line1      String
+  line2      String?
+  city       String
+  state      String
+  postalCode String
+  country    String  @default("BR")
+
+  // Metadata
+  isDefault Boolean  @default(false)
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model PaymentMethod {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Stripe Details
+  stripePaymentMethodId String  @unique
+  type                  String
+  last4                 String?
+  brand                 String?
+  expiryMonth           Int?
+  expiryYear            Int?
+
+  // Metadata
+  isDefault Boolean  @default(false)
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([stripePaymentMethodId])
+}
