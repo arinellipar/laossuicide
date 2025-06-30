@@ -1,14 +1,7 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import {
-  motion,
-  AnimatePresence,
-  useScroll,
-  useTransform,
-  useMotionValue,
-  useSpring,
-} from "framer-motion";
+import React, { useState, useEffect } from "react";
+import { motion, useScroll, useTransform, useMotionValue } from "framer-motion";
 import {
   Play,
   Pause,
@@ -25,9 +18,9 @@ import {
   Disc3,
   Music,
   Zap,
-  Sparkles,
   Radio,
 } from "lucide-react";
+import Image from "next/image";
 
 const LAOSLandingPage = () => {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -35,7 +28,7 @@ const LAOSLandingPage = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [hoveredCard, setHoveredCard] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
-  const audioRef = useRef(null);
+  const [gpuEnabled, setGpuEnabled] = useState(true);
   const { scrollY } = useScroll();
 
   const mouseX = useMotionValue(0);
@@ -47,6 +40,11 @@ const LAOSLandingPage = () => {
 
   useEffect(() => {
     setMounted(true);
+    // Check for GPU acceleration support
+    const canvas = document.createElement("canvas");
+    const gl =
+      canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+    setGpuEnabled(!!gl);
   }, []);
 
   useEffect(() => {
@@ -121,6 +119,32 @@ const LAOSLandingPage = () => {
     "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&h=400&fit=crop",
   ];
 
+  // GPU Accelerated Wrapper Component
+  const GPUAccelerated = ({
+    children,
+    className = "",
+    style = {},
+  }: {
+    children: React.ReactNode;
+    className?: string;
+    style?: React.CSSProperties;
+  }) => {
+    return (
+      <div
+        className={`gpu-accelerated ${className}`}
+        style={{
+          transform: "translateZ(0)",
+          willChange: "transform",
+          backfaceVisibility: "hidden",
+          perspective: 1000,
+          ...style,
+        }}
+      >
+        {children}
+      </div>
+    );
+  };
+
   const FloatingParticles = () => {
     const [mounted, setMounted] = useState(false);
 
@@ -141,7 +165,7 @@ const LAOSLandingPage = () => {
           return (
             <motion.div
               key={i}
-              className="absolute w-1 h-1 bg-pink-500 rounded-full"
+              className="absolute w-1 h-1 bg-pink-500 rounded-full gpu-accelerated"
               initial={{
                 x: randomX,
                 y: randomY,
@@ -160,6 +184,8 @@ const LAOSLandingPage = () => {
               style={{
                 filter: "blur(1px)",
                 boxShadow: "0 0 10px rgba(236, 72, 153, 0.8)",
+                transform: "translateZ(0)",
+                willChange: "transform",
               }}
             />
           );
@@ -170,7 +196,7 @@ const LAOSLandingPage = () => {
 
   const GlowingGrid = () => {
     return (
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none gpu-accelerated">
         <div
           className="absolute inset-0"
           style={{
@@ -179,16 +205,56 @@ const LAOSLandingPage = () => {
               linear-gradient(90deg, rgba(236, 72, 153, 0.1) 1px, transparent 1px)
             `,
             backgroundSize: "50px 50px",
-            transform: "perspective(500px) rotateX(60deg)",
+            transform: "perspective(500px) rotateX(60deg) translateZ(0)",
             transformOrigin: "center center",
+            willChange: "transform",
           }}
         />
       </div>
     );
   };
 
+  // Performance Monitor Component (for debug - hidden by default)
+  const PerformanceMonitor = () => {
+    const [fps, setFps] = useState(60);
+    const [showMonitor] = useState(false); // Set to true for debugging
+
+    useEffect(() => {
+      if (!showMonitor) return;
+
+      let lastTime = performance.now();
+      let frames = 0;
+
+      const updateFPS = () => {
+        frames++;
+        const currentTime = performance.now();
+
+        if (currentTime >= lastTime + 1000) {
+          setFps(Math.round((frames * 1000) / (currentTime - lastTime)));
+          frames = 0;
+          lastTime = currentTime;
+        }
+
+        requestAnimationFrame(updateFPS);
+      };
+
+      const rafId = requestAnimationFrame(updateFPS);
+      return () => cancelAnimationFrame(rafId);
+    }, [showMonitor]);
+
+    if (!showMonitor) return null;
+
+    return (
+      <div className="fixed top-4 right-4 bg-black/80 text-green-400 px-4 py-2 rounded-lg font-mono text-sm z-50 backdrop-blur-sm border border-green-500/30">
+        <div>FPS: {fps}</div>
+        <div>GPU: {gpuEnabled ? "Enabled" : "Disabled"}</div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-black text-white overflow-x-hidden relative">
+      <PerformanceMonitor />
       <FloatingParticles />
 
       {/* Futuristic Hero Section */}
@@ -197,7 +263,7 @@ const LAOSLandingPage = () => {
 
         <motion.div
           style={{ y: parallaxY, scale }}
-          className="absolute inset-0 z-0"
+          className="absolute inset-0 z-0 gpu-accelerated"
         >
           <div className="absolute inset-0 bg-gradient-to-b from-black via-purple-900/20 to-black" />
 
@@ -208,7 +274,11 @@ const LAOSLandingPage = () => {
               rotate: [0, 180, 360],
             }}
             transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[1000px]"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[1000px] gpu-accelerated"
+            style={{
+              transform: "translate3d(-50%, -50%, 0)",
+              willChange: "transform",
+            }}
           >
             <div className="absolute inset-0 bg-gradient-to-r from-pink-500/30 via-purple-500/30 to-pink-500/30 rounded-full blur-[200px]" />
             <div className="absolute inset-20 bg-gradient-to-r from-purple-600/40 to-pink-600/40 rounded-full blur-[150px] animate-pulse" />
@@ -219,8 +289,12 @@ const LAOSLandingPage = () => {
           {[...Array(5)].map((_, i) => (
             <motion.div
               key={i}
-              className="absolute h-[1px] w-full bg-gradient-to-r from-transparent via-pink-500 to-transparent"
-              style={{ top: `${20 + i * 15}%` }}
+              className="absolute h-[1px] w-full bg-gradient-to-r from-transparent via-pink-500 to-transparent gpu-accelerated"
+              style={{
+                top: `${20 + i * 15}%`,
+                transform: "translateZ(0)",
+                willChange: "transform, opacity",
+              }}
               animate={{
                 x: [-1000, 1000],
                 opacity: [0, 1, 0],
@@ -243,7 +317,8 @@ const LAOSLandingPage = () => {
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ duration: 1.5, type: "spring", damping: 15 }}
-            className="relative inline-block mb-8"
+            className="relative inline-block mb-8 gpu-accelerated"
+            style={{ willChange: "transform" }}
           >
             <motion.div
               animate={{
@@ -264,7 +339,11 @@ const LAOSLandingPage = () => {
                 repeatDelay: 2,
                 times: [0, 0.1, 0.2, 0.3, 0.4, 0.7, 1],
               }}
-              className="absolute top-1/2 -left-16 md:-left-24 -translate-y-1/2"
+              className="absolute top-1/2 -left-16 md:-left-24 -translate-y-1/2 gpu-accelerated"
+              style={{
+                transform: "translate3d(0, -50%, 0)",
+                willChange: "opacity, filter",
+              }}
             >
               <Zap className="w-12 h-12 md:w-16 md:h-16 text-purple-500 drop-shadow-[0_0_30px_rgba(168,85,247,1)]" />
             </motion.div>
@@ -291,15 +370,19 @@ const LAOSLandingPage = () => {
                 delay: 0.4,
                 times: [0, 0.1, 0.2, 0.3, 0.4, 0.7, 1],
               }}
-              className="absolute top-1/2 -right-16 md:-right-24 -translate-y-1/2"
+              className="absolute top-1/2 -right-16 md:-right-24 -translate-y-1/2 gpu-accelerated"
+              style={{
+                transform: "translate3d(0, -50%, 0)",
+                willChange: "opacity, filter, transform",
+              }}
             >
               <Zap className="w-12 h-12 md:w-16 md:h-16 text-purple-500 drop-shadow-[0_0_30px_rgba(168,85,247,1)]" />
             </motion.div>
 
-            <h1 className="text-8xl md:text-[12rem] font-black bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 relative">
+            <h1 className="text-8xl md:text-[12rem] font-black bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 relative gpu-accelerated">
               LAOS
-              <div className="absolute inset-0 blur-[50px] bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 opacity-50 -z-10" />
-              <div className="absolute inset-0 blur-[100px] bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 opacity-30 -z-20 animate-pulse" />
+              <div className="absolute inset-0 blur-[50px] bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 opacity-50 -z-10 gpu-accelerated" />
+              <div className="absolute inset-0 blur-[100px] bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 opacity-30 -z-20 animate-pulse gpu-accelerated" />
             </h1>
           </motion.div>
 
@@ -322,7 +405,7 @@ const LAOSLandingPage = () => {
             transition={{ delay: 1, duration: 1 }}
             className="mt-12 flex justify-center gap-4"
           >
-            {["MUSIC", "SHOWS", "MERCH"].map((text, i) => (
+            {["MUSIC", "SHOWS", "MERCH"].map((text) => (
               <motion.div
                 key={text}
                 whileHover={{ scale: 1.1, y: -5 }}
@@ -450,7 +533,7 @@ const LAOSLandingPage = () => {
                   {[...Array(50)].map((_, i) => (
                     <motion.div
                       key={i}
-                      className="w-1 bg-gradient-to-t from-pink-500 to-purple-500 rounded-full"
+                      className="w-1 bg-gradient-to-t from-pink-500 to-purple-500 rounded-full gpu-accelerated"
                       animate={{
                         height: isPlaying ? [10, 20 + (i % 5) * 12, 10] : 10,
                       }}
@@ -462,6 +545,8 @@ const LAOSLandingPage = () => {
                       }}
                       style={{
                         boxShadow: "0 0 10px rgba(236, 72, 153, 0.5)",
+                        transform: "translateZ(0)",
+                        willChange: "height",
                       }}
                     />
                   ))}
@@ -562,7 +647,7 @@ const LAOSLandingPage = () => {
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 to-purple-500/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
 
-                <div
+                <GPUAccelerated
                   className="relative bg-black/40 backdrop-blur-2xl rounded-2xl p-8 border border-purple-500/30 overflow-hidden group"
                   style={{
                     background:
@@ -644,7 +729,7 @@ const LAOSLandingPage = () => {
                       </motion.button>
                     )}
                   </div>
-                </div>
+                </GPUAccelerated>
               </motion.div>
             ))}
           </div>
@@ -702,13 +787,15 @@ const LAOSLandingPage = () => {
                           {[...Array(10)].map((_, i) => (
                             <motion.div
                               key={i}
-                              className="absolute w-full h-[2px]"
+                              className="absolute w-full h-[2px] gpu-accelerated"
                               style={{
                                 top: `${i * 10 + 5}%`,
                                 background:
                                   i % 2 === 0
                                     ? "rgba(239, 68, 68, 0.8)"
                                     : "rgba(168, 85, 247, 0.8)",
+                                transform: "translateZ(0)",
+                                willChange: "transform, opacity",
                               }}
                               animate={{
                                 x: [-100, 0, 100],
@@ -886,16 +973,17 @@ const LAOSLandingPage = () => {
                               {[...Array(3)].map((_, i) => (
                                 <motion.div
                                   key={i}
-                                  className="absolute inset-0 rounded-full border border-purple-500/30"
+                                  className="absolute inset-0 rounded-full border border-purple-500/30 gpu-accelerated"
                                   style={{
                                     width: `${200 - i * 50}px`,
                                     height: `${200 - i * 50}px`,
                                     left: "50%",
                                     top: "50%",
-                                    transform: "translate(-50%, -50%)",
+                                    transform: "translate3d(-50%, -50%, 0)",
                                     filter: `drop-shadow(0 0 ${
                                       10 + i * 5
                                     }px rgba(168, 85, 247, 0.5))`,
+                                    willChange: "transform",
                                   }}
                                   animate={{ rotate: i % 2 === 0 ? 360 : -360 }}
                                   transition={{
@@ -949,7 +1037,7 @@ const LAOSLandingPage = () => {
                       {[...Array(10)].map((_, i) => (
                         <motion.div
                           key={i}
-                          className="absolute w-1 h-1 bg-white rounded-full"
+                          className="absolute w-1 h-1 bg-white rounded-full gpu-accelerated"
                           initial={{
                             x: `${i * 10 + 5}%`,
                             y: "100%",
@@ -964,6 +1052,10 @@ const LAOSLandingPage = () => {
                             repeat: Infinity,
                             delay: i * 0.2,
                             ease: "easeOut",
+                          }}
+                          style={{
+                            transform: "translateZ(0)",
+                            willChange: "transform, opacity",
                           }}
                         />
                       ))}
@@ -1048,7 +1140,7 @@ const LAOSLandingPage = () => {
                     transform: "translateZ(0)",
                   }}
                 >
-                  <img
+                  <Image
                     src={photo}
                     alt={`Band photo ${index + 1}`}
                     className="w-full h-[400px] object-cover transition-all duration-700 group-hover:scale-110"
@@ -1238,6 +1330,45 @@ const LAOSLandingPage = () => {
 
         .perspective-1000 {
           perspective: 1000px;
+        }
+
+        /* GPU Optimization Classes */
+        .gpu-accelerated {
+          transform: translateZ(0);
+          will-change: transform;
+          backface-visibility: hidden;
+        }
+
+        /* Force GPU for heavy animations */
+        .blur-xl,
+        .blur-2xl,
+        .blur-3xl,
+        .blur-\\[50px\\],
+        .blur-\\[100px\\],
+        .blur-\\[150px\\],
+        .blur-\\[200px\\] {
+          transform: translate3d(0, 0, 0);
+        }
+
+        /* Optimize backdrop filters */
+        .backdrop-blur-xl,
+        .backdrop-blur-2xl {
+          transform: translateZ(0);
+          will-change: backdrop-filter;
+        }
+
+        /* Reduce paint areas for animated elements */
+        .animate-pulse {
+          will-change: opacity;
+        }
+
+        /* Optimize gradient animations */
+        @media (prefers-reduced-motion: reduce) {
+          * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+          }
         }
       `}</style>
     </div>
