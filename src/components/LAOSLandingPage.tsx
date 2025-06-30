@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import { motion, useScroll, useTransform, useMotionValue } from "framer-motion";
 import {
   Play,
@@ -20,7 +21,6 @@ import {
   Zap,
   Radio,
 } from "lucide-react";
-import Image from "next/image";
 
 const LAOSLandingPage = () => {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -267,23 +267,12 @@ const LAOSLandingPage = () => {
         >
           <div className="absolute inset-0 bg-gradient-to-b from-black via-purple-900/20 to-black" />
 
-          {/* Multiple animated glow orbs */}
-          <motion.div
-            animate={{
-              scale: [1, 1.2, 1],
-              rotate: [0, 180, 360],
-            }}
-            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[1000px] gpu-accelerated"
-            style={{
-              transform: "translate3d(-50%, -50%, 0)",
-              willChange: "transform",
-            }}
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-pink-500/30 via-purple-500/30 to-pink-500/30 rounded-full blur-[200px]" />
-            <div className="absolute inset-20 bg-gradient-to-r from-purple-600/40 to-pink-600/40 rounded-full blur-[150px] animate-pulse" />
-            <div className="absolute inset-40 bg-gradient-to-r from-pink-500/50 to-purple-500/50 rounded-full blur-[100px] animate-pulse delay-500" />
-          </motion.div>
+          {/* Static gradient background - sem rotação */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[1000px] gpu-accelerated">
+            <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-pink-500/20 rounded-full blur-[200px]" />
+            <div className="absolute inset-20 bg-gradient-to-r from-purple-600/30 to-pink-600/30 rounded-full blur-[150px] animate-pulse" />
+            <div className="absolute inset-40 bg-gradient-to-r from-pink-500/40 to-purple-500/40 rounded-full blur-[100px] animate-pulse delay-500" />
+          </div>
 
           {/* Cyberpunk lines */}
           {[...Array(5)].map((_, i) => (
@@ -1141,11 +1130,13 @@ const LAOSLandingPage = () => {
                   }}
                 >
                   <Image
-                    width={600}
-                    height={400}
                     src={photo}
                     alt={`Band photo ${index + 1}`}
+                    width={600}
+                    height={400}
                     className="w-full h-[400px] object-cover transition-all duration-700 group-hover:scale-110"
+                    quality={90}
+                    priority={index < 2}
                   />
 
                   {/* Cyberpunk scan lines */}
