@@ -1141,6 +1141,8 @@ const LAOSLandingPage = () => {
                   }}
                 >
                   <Image
+                    width={600}
+                    height={400}
                     src={photo}
                     alt={`Band photo ${index + 1}`}
                     className="w-full h-[400px] object-cover transition-all duration-700 group-hover:scale-110"

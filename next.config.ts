@@ -11,9 +11,21 @@ const nextConfig = {
   },
 
   reactStrictMode: false, // Temporariamente desabilitado para debug
-  swcMinify: true,
+
   compiler: {
     removeConsole: process.env.NODE_ENV === "production",
+  },
+
+  // Configuração para permitir imagens externas
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+        port: "",
+        pathname: "/**",
+      },
+    ],
   },
 };
 
