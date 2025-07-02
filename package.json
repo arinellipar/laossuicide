@@ -6,17 +6,41 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:generate": "prisma generate",
+    "db:seed": "tsx prisma/seed.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@auth/prisma-adapter": "^2.0.0",
+    "@clerk/nextjs": "^5.2.4",
+    "@lucia-auth/adapter-prisma": "^4.0.1",
+    "@prisma/client": "6.11.0",
+    "@supabase/storage-js": "^2.5.5",
+    "@supabase/supabase-js": "^2.43.1",
+    "@tanstack/react-query": "^5.37.1",
+    "@types/next-auth": "^3.15.0",
+    "@vercel/edge": "^1.2.2",
+    "@vercel/edge-config": "^1.4.0",
+    "@vercel/edge-functions-ui": "^0.2.1",
     "framer-motion": "^12.19.2",
+    "lucia": "^3.2.2",
     "lucide-react": "^0.525.0",
     "next": "15.3.4",
+    "next-auth": "^5.0.0-beta.18",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.51.4",
+    "recharts": "^2.12.7",
+    "zod": "^3.23.8",
+    "zustand": "^4.5.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -24,6 +48,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.3.4",
     "postcss": "^8.5.6",
+    "prisma": "^6.11.0",
     "tailwindcss": "3",
     "typescript": "^5"
   }
