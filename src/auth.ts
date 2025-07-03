@@ -8,6 +8,8 @@ import { compare } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
 import type { User, UserRole } from "@prisma/client";
+import type { JWT } from "next-auth/jwt";
+import type { Session } from "next-auth";
 
 /**
  * Module Augmentation for type-safe session handling
@@ -40,7 +42,7 @@ declare module "next-auth/jwt" {
  * - CSRF protection with double-submit cookies
  * - Secure cookie configuration with SameSite and HttpOnly flags
  */
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const authConfig = NextAuth({
   adapter: PrismaAdapter(prisma),
 
   // Session configuration with security hardening
@@ -138,7 +140,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         // Initial sign in - populate JWT with user data
         token.id = user.id!;
-        token.role = (user as User).role || "USER";
+        token.role = (user as any).role || "USER";
       }
 
       if (account) {
@@ -153,27 +155,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // Session callback - shapes the session object
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as UserRole;
+        session.user.id = token.id;
+        session.user.role = token.role;
       }
       return session;
     },
 
     // Sign in callback - control access
-    async signIn({ account }) {
+    async signIn({ user, account, profile }) {
       // Allow OAuth sign ins
       if (account?.provider !== "credentials") {
         return true;
       }
 
-      // For credentials, email verification can be checked here
-      // But since we're allowing sign in regardless, we don't need to query the user
-      // If email verification check is needed in the future, uncomment below:
-      // const existingUser = await prisma.user.findUnique({
-      //   where: { email: user.email! },
-      //   select: { emailVerified: true },
-      // });
-      // return !!existingUser?.emailVerified;
+      // For credentials, check if email is verified
+      const existingUser = await prisma.user.findUnique({
+        where: { email: user.email! },
+        select: { emailVerified: true },
+      });
 
       // Allow sign in even if email not verified (handle in app)
       return true;
@@ -242,7 +241,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
   // Event handlers for logging and monitoring
   events: {
-    async signIn({ user, account, isNewUser }) {
+    async signIn({ user, account, profile, isNewUser }) {
       // Log successful sign ins
       await prisma.auditLog.create({
         data: {
@@ -257,15 +256,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         },
       });
     },
-    async signOut(params) {
+    async signOut({ session, token }) {
       // Log sign outs
-      if ("token" in params && params.token?.id) {
+      if (token?.id) {
         await prisma.auditLog.create({
           data: {
-            userId: params.token.id,
+            userId: token.id,
             action: "SIGN_OUT",
             entity: "USER",
-            entityId: params.token.id,
+            entityId: token.id,
           },
         });
       }
@@ -278,3 +277,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // Trust host header in production
   trustHost: true,
 });
+
+export const { handlers, auth, signIn, signOut } = authConfig;

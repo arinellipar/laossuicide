@@ -3,61 +3,95 @@ import { PrismaClient } from "@prisma/client";
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * Singleton pattern implementation for Prisma Client
- * Prevents connection exhaustion in serverless environments
- * Implements connection pooling through PgBouncer
+ * Prisma Client Configuration
+ * Implements singleton pattern to prevent multiple instances in development
  */
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
 
-/**
- * Prisma configuration with advanced logging and performance monitoring
- * Implements query optimization through selective logging and metrics collection
- */
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+// Extend the global object to include prisma
+declare global {
+  var prisma: PrismaClient | undefined;
+}
+
+// Create Prisma Client with configuration
+const prismaClientSingleton = () => {
+  return new PrismaClient({
     log:
       process.env.NODE_ENV === "development"
         ? ["query", "error", "warn"]
         : ["error"],
-
-    // Query engine configuration for optimal performance
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL,
-      },
-    },
   });
+};
 
-// Middleware for query performance monitoring
-if (process.env.NODE_ENV === "development") {
-  prisma.$use(async (params, next) => {
-    const before = Date.now();
-    const result = await next(params);
-    const after = Date.now();
+// Use global variable in development to preserve instance
+// across hot reloads
+export const prisma = globalThis.prisma ?? prismaClientSingleton();
 
-    console.log(
-      `Query ${params.model}.${params.action} took ${after - before}ms`
-    );
-
-    return result;
-  });
-}
-
-// Prevent multiple instances in development
 if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+  globalThis.prisma = prisma;
 }
+
+// Add middleware for soft deletes (optional)
+prisma.$use(async (params, next) => {
+  // Soft delete middleware
+  if (params.action === "delete") {
+    // Change action to update
+    params.action = "update";
+    params.args["data"] = { deletedAt: new Date() };
+  }
+
+  if (params.action === "deleteMany") {
+    // Change action to updateMany
+    params.action = "updateMany";
+    if (params.args.data !== undefined) {
+      params.args.data["deletedAt"] = new Date();
+    } else {
+      params.args["data"] = { deletedAt: new Date() };
+    }
+  }
+
+  // Exclude soft deleted records from queries
+  if (params.action === "findUnique" || params.action === "findFirst") {
+    // Change to findFirst
+    params.action = "findFirst";
+    // Add where clause to exclude deleted records
+    params.args.where = {
+      ...params.args.where,
+      deletedAt: null,
+    };
+  }
+
+  if (params.action === "findMany") {
+    // Exclude deleted records
+    if (params.args.where) {
+      if (params.args.where.deletedAt === undefined) {
+        params.args.where["deletedAt"] = null;
+      }
+    } else {
+      params.args["where"] = { deletedAt: null };
+    }
+  }
+
+  return next(params);
+});
 
 /**
- * Supabase client configuration with Row Level Security (RLS)
- * Implements secure client-side database access with JWT authentication
+ * Supabase Client Configuration
+ * Creates both public and admin clients
  */
+
+// Type safety for environment variables
+const getEnvVariable = (key: string): string => {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(`Missing environment variable: ${key}`);
+  }
+  return value;
+};
+
+// Create public Supabase client (uses anon key)
 export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  getEnvVariable("NEXT_PUBLIC_SUPABASE_URL"),
+  getEnvVariable("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
   {
     auth: {
       persistSession: true,
@@ -75,279 +109,49 @@ export const supabase = createClient(
   }
 );
 
-/**
- * Supabase admin client for server-side operations
- * Bypasses RLS for administrative tasks
- */
+// Create admin Supabase client (uses service role key)
+// Only use this on the server side!
 export const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  getEnvVariable("NEXT_PUBLIC_SUPABASE_URL"),
+  getEnvVariable("SUPABASE_SERVICE_ROLE_KEY"),
   {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+    db: {
+      schema: "public",
+    },
+    global: {
+      headers: {
+        "x-application-name": "laos-band-admin",
+      },
     },
   }
 );
 
-// src/lib/db.ts
 /**
- * Advanced database utility functions implementing
- * transaction management, retry logic, and error handling
+ * Database connection health check
  */
-import { Prisma } from "@prisma/client";
-
-/**
- * Transaction wrapper with automatic retry logic
- * Implements exponential backoff for transient failures
- */
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  options: {
-    maxRetries?: number;
-    initialDelay?: number;
-    maxDelay?: number;
-    factor?: number;
-  } = {}
-): Promise<T> {
-  const {
-    maxRetries = 3,
-    initialDelay = 100,
-    maxDelay = 5000,
-    factor = 2,
-  } = options;
-
-  let lastError: Error;
-  let delay = initialDelay;
-
-  for (let i = 0; i <= maxRetries; i++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error as Error;
-
-      // Don't retry on non-transient errors
-      if (!isTransientError(error)) {
-        throw error;
-      }
-
-      if (i === maxRetries) {
-        throw lastError;
-      }
-
-      // Exponential backoff with jitter
-      const jitter = Math.random() * delay * 0.1;
-      await new Promise((resolve) => setTimeout(resolve, delay + jitter));
-
-      delay = Math.min(delay * factor, maxDelay);
-    }
-  }
-
-  throw lastError!;
-}
-
-/**
- * Determine if error is transient and eligible for retry
- */
-function isTransientError(error: unknown): boolean {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    // P1001: Can't reach database server
-    // P1002: Database server timeout
-    // P2024: Connection pool timeout
-    return ["P1001", "P1002", "P2024"].includes(error.code);
-  }
-
-  if (error instanceof Error) {
-    const message = error.message.toLowerCase();
-    return (
-      message.includes("timeout") ||
-      message.includes("connection") ||
-      message.includes("econnrefused")
-    );
-  }
-
-  return false;
-}
-
-/**
- * Batch operation utility for optimal database performance
- * Implements chunking to prevent query size limits
- */
-export async function batchOperation<T>(
-  items: T[],
-  operation: (batch: T[]) => Promise<void>,
-  batchSize: number = 100
-): Promise<void> {
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize);
-    await operation(batch);
-  }
-}
-
-/**
- * Cursor-based pagination utility
- * Implements efficient pagination for large datasets
- */
-export interface PaginationParams {
-  cursor?: string;
-  take?: number;
-  direction?: "forward" | "backward";
-}
-
-export interface PaginatedResult<T> {
-  items: T[];
-  nextCursor?: string;
-  prevCursor?: string;
-  hasMore: boolean;
-  total?: number;
-}
-
-export async function paginate<T extends { id: string }>(
-  model: {
-    findMany: (args: unknown) => Promise<T[]>;
-    count: (args: unknown) => Promise<number>;
-  },
-  params: PaginationParams & {
-    where?: unknown;
-    orderBy?: unknown;
-    include?: unknown;
-    select?: unknown;
-  }
-): Promise<PaginatedResult<T>> {
-  const {
-    cursor,
-    take = 20,
-    direction = "forward",
-    where,
-    orderBy = { createdAt: "desc" },
-    include,
-    select,
-  } = params;
-
-  const skip = cursor ? 1 : 0;
-  const takeWithOverflow = direction === "forward" ? take + 1 : -(take + 1);
-
-  type QueryOptions = {
-    take: number;
-    skip: number;
-    where?: unknown;
-    orderBy?: unknown;
-    cursor?: { id: string };
-    include?: unknown;
-    select?: unknown;
-  };
-
-  const query: QueryOptions = {
-    take: takeWithOverflow,
-    skip,
-    where,
-    orderBy,
-  };
-
-  if (cursor) {
-    query.cursor = { id: cursor };
-  }
-
-  if (include) query.include = include;
-  if (select) query.select = select;
-
-  const items = await model.findMany(query);
-
-  let hasMore = false;
-  if (items.length > take) {
-    hasMore = true;
-    items.pop();
-  }
-
-  const nextCursor = items.length > 0 ? items[items.length - 1].id : undefined;
-  const prevCursor = items.length > 0 ? items[0].id : undefined;
-
-  // Optional: Get total count (expensive operation)
-  const total = params.cursor ? undefined : await model.count({ where });
-
-  return {
-    items,
-    nextCursor: hasMore ? nextCursor : undefined,
-    prevCursor: direction === "backward" ? prevCursor : undefined,
-    hasMore,
-    total,
-  };
-}
-
-/**
- * Soft delete implementation
- * Maintains data integrity while allowing recovery
- */
-// Define a type for Prisma models with update method
-type PrismaModelWithUpdate = {
-  update: (args: {
-    where: { id: string };
-    data: { deletedAt: Date; deletedBy?: string };
-  }) => Promise<unknown>;
-};
-
-export async function softDelete(
-  model: PrismaClient[keyof PrismaClient] | string,
-  id: string,
-  userId?: string
-): Promise<void> {
-  if (typeof model === "string") {
-    // Handle string model name case
-    const modelName = model as string;
-    await (
-      prisma[
-        modelName as keyof PrismaClient
-      ] as unknown as PrismaModelWithUpdate
-    ).update({
-      where: { id },
-      data: {
-        deletedAt: new Date(),
-        deletedBy: userId,
-      },
-    });
-  } else {
-    // Handle model delegate case
-    await (
-      model as unknown as {
-        update: (args: {
-          where: { id: string };
-          data: { deletedAt: Date; deletedBy?: string };
-        }) => Promise<unknown>;
-      }
-    ).update({
-      where: { id },
-      data: {
-        deletedAt: new Date(),
-        deletedBy: userId,
-      },
-    });
-  }
-}
-
-/**
- * Database health check utility
- * Implements comprehensive connectivity verification
- */
-export async function checkDatabaseHealth(): Promise<{
-  healthy: boolean;
-  latency: number;
-  error?: string;
-}> {
-  const start = Date.now();
-
+export async function checkDatabaseConnection(): Promise<boolean> {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    const latency = Date.now() - start;
-
-    return {
-      healthy: true,
-      latency,
-    };
+    return true;
   } catch (error) {
-    return {
-      healthy: false,
-      latency: Date.now() - start,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
+    console.error("Database connection failed:", error);
+    return false;
   }
 }
+
+/**
+ * Graceful shutdown handling
+ */
+process.on("beforeExit", async () => {
+  await prisma.$disconnect();
+});
+
+// Export types for use in other files
+export type { PrismaClient } from "@prisma/client";
+export type SupabaseClient = typeof supabase;
+export type SupabaseAdminClient = typeof supabaseAdmin;
