@@ -6,7 +6,7 @@ import Image from "next/image";
 export default function BiografiaPage() {
   const members = [
     {
-      name: "Alex Storm",
+      name: "Mitsuo Awada",
       role: "Vocalista / Guitarrista",
       bio: "Fundador da banda, Alex traz a energia cyberpunk com vocais poderosos e riffs futuristas.",
       image:
@@ -14,7 +14,7 @@ export default function BiografiaPage() {
       social: "@alexstorm",
     },
     {
-      name: "Luna Neon",
+      name: "Koy Void",
       role: "Baixista / Backing Vocal",
       bio: "Com grooves pesados e linhas melódicas únicas, Luna é o coração pulsante da banda.",
       image:
@@ -40,7 +40,7 @@ export default function BiografiaPage() {
   ];
 
   const timeline = [
-    { year: "2023", event: "Formação da banda em São Paulo" },
+    { year: "2023", event: "Formação da banda em Rio de Janeiro" },
     { year: "2023", event: "Primeiro show no Underground Club" },
     { year: "2024", event: "Lançamento do álbum 'Cyber Rebellion'" },
     { year: "2024", event: "Tour nacional 'Neon Dreams'" },
