@@ -9,21 +9,26 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// Lucia Auth Models
+// ============= AUTH MODELS =============
 model User {
   id            String    @id @default(cuid())
   email         String?   @unique
   emailVerified DateTime?
   image         String?
   name          String?
-  password      String? // For credential-based auth
+  password      String?
   address       String?
   zipCode       String?
   phone         String?
   role          UserRole  @default(USER)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-  sessions      Session[]
+
+  // Relations
+  sessions  Session[]
+  orders    Order[]
+  cartItems CartItem[]
+  favorites Favorite[]
 }
 
 model Session {
@@ -33,10 +38,178 @@ model Session {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// User Role Enumeration
+// ============= E-COMMERCE MODELS =============
+model Product {
+  id              String          @id @default(cuid())
+  name            String
+  description     String
+  price           Decimal         @db.Decimal(10, 2)
+  category        ProductCategory
+  image           String
+  inStock         Boolean         @default(true)
+  featured        Boolean         @default(false)
+  stockQuantity   Int             @default(0)
+  stripeProductId String?         @unique
+  stripePriceId   String?         @unique
+  metadata        Json? // Para dados adicionais
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relations
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+  favorites  Favorite[]
+
+  @@index([category])
+  @@index([featured])
+  @@index([inStock])
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+model Order {
+  id            String         @id @default(cuid())
+  userId        String
+  orderNumber   String         @unique @default(cuid())
+  status        OrderStatus    @default(PENDING)
+  paymentStatus PaymentStatus  @default(PENDING)
+  paymentMethod PaymentMethod?
+
+  // Valores
+  subtotal Decimal @db.Decimal(10, 2)
+  tax      Decimal @default(0) @db.Decimal(10, 2)
+  shipping Decimal @default(0) @db.Decimal(10, 2)
+  total    Decimal @db.Decimal(10, 2)
+
+  // Stripe
+  stripeSessionId       String? @unique
+  stripePaymentIntentId String? @unique
+
+  // Endereço de entrega
+  shippingName    String?
+  shippingAddress String?
+  shippingCity    String?
+  shippingState   String?
+  shippingZipCode String?
+  shippingPhone   String?
+
+  // Timestamps
+  paidAt      DateTime?
+  shippedAt   DateTime?
+  deliveredAt DateTime?
+  canceledAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  user        User         @relation(fields: [userId], references: [id])
+  items       OrderItem[]
+  paymentLogs PaymentLog[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([stripeSessionId])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Decimal @db.Decimal(10, 2) // Preço no momento da compra
+  total     Decimal @db.Decimal(10, 2)
+
+  // Relations
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model PaymentLog {
+  id            String   @id @default(cuid())
+  orderId       String
+  event         String // stripe event type
+  status        String
+  amount        Decimal? @db.Decimal(10, 2)
+  currency      String?
+  stripeEventId String?  @unique
+  rawData       Json // payload completo do stripe
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+
+  // Relations
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@index([stripeEventId])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+// ============= ENUMS =============
 enum UserRole {
   USER
   ADMIN
   SUPER_ADMIN
   STAFF
+}
+
+enum ProductCategory {
+  CLOTHING
+  ACCESSORIES
+  VINYL
+  DIGITAL
+}
+
+enum OrderStatus {
+  PENDING // Aguardando pagamento
+  PROCESSING // Pagamento confirmado, preparando envio
+  SHIPPED // Enviado
+  DELIVERED // Entregue
+  CANCELED // Cancelado
+  REFUNDED // Reembolsado
+}
+
+enum PaymentStatus {
+  PENDING // Aguardando
+  PROCESSING // Processando
+  SUCCEEDED // Pago
+  FAILED // Falhou
+  CANCELED // Cancelado
+  REFUNDED // Reembolsado
+}
+
+enum PaymentMethod {
+  CARD // Cartão (crédito/débito)
+  PIX // PIX
+  BOLETO // Boleto (futuro)
 }
