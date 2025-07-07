@@ -64,6 +64,8 @@ export default function UserMusicPage() {
             <div className="flex flex-col md:flex-row">
               <div className="md:w-64 h-64 relative">
                 <Image
+                  width={300}
+                  height={600}
                   src={album.image}
                   alt={album.title}
                   className="w-full h-full object-cover"

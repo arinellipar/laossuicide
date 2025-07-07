@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -55,8 +55,9 @@ interface InputFieldProps {
   icon: React.ElementType;
   type?: string;
   placeholder: string;
+  name: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  register: any;
+  control: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   error?: any;
   showToggle?: boolean;
@@ -72,12 +73,28 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const router = useRouter();
 
+  // Initialize forms with proper default values to ensure controlled behavior
   const loginForm = useForm<LoginData>({
     resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+    mode: "onChange", // Enable real-time validation
   });
 
   const signupForm = useForm<SignupData>({
     resolver: zodResolver(signupSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+      address: "",
+      zipCode: "",
+      phone: "",
+    },
+    mode: "onChange", // Enable real-time validation
   });
 
   const handleLogin = async (data: LoginData) => {
@@ -88,8 +105,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       const result = await signIn(data.email, data.password);
 
       if (result.success) {
-        // Use a default role since the result doesn't include role information
-        const redirectUrl = "/user"; // Default to user page on successful login
+        const redirectUrl = "/user";
         window.location.href = redirectUrl;
       } else {
         setError((result.error as string) || "Erro ao fazer login");
@@ -117,7 +133,6 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       });
 
       if (result.success) {
-        // Since the response doesn't include role information, we use a default role
         const userRole = "USER";
         const redirectUrl = userRole === "USER" ? "/user" : "/dashboard";
         window.location.href = redirectUrl;
@@ -132,53 +147,75 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     }
   };
 
+  // Properly typed controlled input component
   const InputField = ({
     icon: Icon,
     type = "text",
     placeholder,
-    register,
+    name,
+    control,
     error,
     showToggle = false,
   }: InputFieldProps) => (
-    <div className="relative group">
-      <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 to-purple-500/20 rounded-xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+    <Controller
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      name={name as any}
+      control={control}
+      render={({ field }) => (
+        <div className="relative group">
+          <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 to-purple-500/20 rounded-xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
 
-      <div className="relative flex items-center">
-        <Icon className="absolute left-4 w-5 h-5 text-purple-400" />
+          <div className="relative flex items-center">
+            <Icon className="absolute left-4 w-5 h-5 text-purple-400" />
 
-        <input
-          type={showToggle ? (showPassword ? "text" : "password") : type}
-          placeholder={placeholder}
-          {...register}
-          className="w-full pl-12 pr-12 py-4 bg-black/50 backdrop-blur-xl rounded-xl border border-purple-500/30 focus:border-pink-500/50 focus:outline-none focus:ring-2 focus:ring-pink-500/20 transition-all placeholder:text-gray-500"
-        />
+            <input
+              type={showToggle ? (showPassword ? "text" : "password") : type}
+              placeholder={placeholder}
+              value={field.value || ""} // Ensure controlled component with fallback
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              ref={field.ref}
+              className="w-full pl-12 pr-12 py-4 bg-black/50 backdrop-blur-xl rounded-xl border border-purple-500/30 focus:border-pink-500/50 focus:outline-none focus:ring-2 focus:ring-pink-500/20 transition-all placeholder:text-gray-500"
+            />
 
-        {showToggle && (
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-4 text-purple-400 hover:text-pink-400 transition-colors"
-          >
-            {showPassword ? (
-              <EyeOff className="w-5 h-5" />
-            ) : (
-              <Eye className="w-5 h-5" />
+            {showToggle && (
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 text-purple-400 hover:text-pink-400 transition-colors"
+              >
+                {showPassword ? (
+                  <EyeOff className="w-5 h-5" />
+                ) : (
+                  <Eye className="w-5 h-5" />
+                )}
+              </button>
             )}
-          </button>
-        )}
-      </div>
+          </div>
 
-      {error && (
-        <motion.p
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-red-400 text-sm mt-2 ml-2"
-        >
-          {error.message}
-        </motion.p>
+          {error && (
+            <motion.p
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-red-400 text-sm mt-2 ml-2"
+            >
+              {error.message}
+            </motion.p>
+          )}
+        </div>
       )}
-    </div>
+    />
   );
+
+  // Reset forms when switching modes to prevent stale data
+  const handleModeSwitch = () => {
+    const newMode = mode === "login" ? "signup" : "login";
+    setMode(newMode);
+    setError(null);
+    loginForm.reset();
+    signupForm.reset();
+    setShowPassword(false);
+  };
 
   return (
     <AnimatePresence>
@@ -264,7 +301,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                       icon={Mail}
                       type="email"
                       placeholder="Email"
-                      register={loginForm.register("email")}
+                      name="email"
+                      control={loginForm.control}
                       error={loginForm.formState.errors.email}
                     />
 
@@ -272,16 +310,19 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                       icon={Lock}
                       type="password"
                       placeholder="Senha"
-                      register={loginForm.register("password")}
+                      name="password"
+                      control={loginForm.control}
                       error={loginForm.formState.errors.password}
                       showToggle
+                      showPassword={showPassword}
+                      setShowPassword={setShowPassword}
                     />
 
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       type="submit"
-                      disabled={isLoading}
+                      disabled={isLoading || !loginForm.formState.isValid}
                       className="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-500 rounded-xl font-bold text-lg relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{
                         boxShadow: "0 0 30px rgba(236, 72, 153, 0.5)",
@@ -302,7 +343,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     <InputField
                       icon={User}
                       placeholder="Nome completo"
-                      register={signupForm.register("name")}
+                      name="name"
+                      control={signupForm.control}
                       error={signupForm.formState.errors.name}
                     />
 
@@ -310,7 +352,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                       icon={Mail}
                       type="email"
                       placeholder="Email"
-                      register={signupForm.register("email")}
+                      name="email"
+                      control={signupForm.control}
                       error={signupForm.formState.errors.email}
                     />
 
@@ -318,38 +361,47 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                       icon={Lock}
                       type="password"
                       placeholder="Senha"
-                      register={signupForm.register("password")}
+                      name="password"
+                      control={signupForm.control}
                       error={signupForm.formState.errors.password}
                       showToggle
+                      showPassword={showPassword}
+                      setShowPassword={setShowPassword}
                     />
 
                     <InputField
                       icon={Lock}
                       type="password"
                       placeholder="Confirmar senha"
-                      register={signupForm.register("confirmPassword")}
+                      name="confirmPassword"
+                      control={signupForm.control}
                       error={signupForm.formState.errors.confirmPassword}
                       showToggle
+                      showPassword={showPassword}
+                      setShowPassword={setShowPassword}
                     />
 
                     <InputField
                       icon={MapPin}
                       placeholder="Endereço completo"
-                      register={signupForm.register("address")}
+                      name="address"
+                      control={signupForm.control}
                       error={signupForm.formState.errors.address}
                     />
 
                     <InputField
                       icon={MapPin}
                       placeholder="CEP (12345-678)"
-                      register={signupForm.register("zipCode")}
+                      name="zipCode"
+                      control={signupForm.control}
                       error={signupForm.formState.errors.zipCode}
                     />
 
                     <InputField
                       icon={Phone}
                       placeholder="Telefone (11) 98765-4321"
-                      register={signupForm.register("phone")}
+                      name="phone"
+                      control={signupForm.control}
                       error={signupForm.formState.errors.phone}
                     />
 
@@ -357,7 +409,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       type="submit"
-                      disabled={isLoading}
+                      disabled={isLoading || !signupForm.formState.isValid}
                       className="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-500 rounded-xl font-bold text-lg relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{
                         boxShadow: "0 0 30px rgba(236, 72, 153, 0.5)",
@@ -381,12 +433,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   </p>
                   <button
                     type="button"
-                    onClick={() => {
-                      setMode(mode === "login" ? "signup" : "login");
-                      setError(null);
-                      loginForm.reset();
-                      signupForm.reset();
-                    }}
+                    onClick={handleModeSwitch}
                     className="text-pink-400 hover:text-pink-300 font-bold mt-2 transition-colors"
                   >
                     {mode === "login" ? "CRIAR CONTA" : "FAZER LOGIN"}

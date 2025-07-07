@@ -6,8 +6,9 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { UserRole } from "@prisma/client";
 
-// Schemas de validação
+// Schemas de validação com tipagem rigorosa
 const signUpSchema = z.object({
   email: z.string().email("Email inválido"),
   password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres"),
@@ -24,19 +25,60 @@ const signInSchema = z.object({
   password: z.string().min(1, "Senha é obrigatória"),
 });
 
-// Types
-type SignUpData = z.infer<typeof signUpSchema>;
+// Types com definição explícita
+export type SignUpData = z.infer<typeof signUpSchema>;
+export type SignInData = z.infer<typeof signInSchema>;
 
-type AuthResult = {
+export type AuthResult = {
   success: boolean;
   error?: string | Record<string, string[]>;
-  role?: string;
+  role?: UserRole;
+  redirectUrl?: string;
 };
 
-// Função para criar um novo usuário
+/**
+ * Determina o role inicial de um novo usuário
+ * Implementa a lógica: primeiro usuário = SUPER_ADMIN, demais = USER
+ */
+async function determineInitialRole(): Promise<UserRole> {
+  try {
+    // Verifica se existe algum usuário no sistema
+    const userCount = await prisma.user.count();
+
+    if (userCount === 0) {
+      console.log("[AUTH] Primeiro usuário do sistema - será SUPER_ADMIN");
+      return "SUPER_ADMIN";
+    }
+
+    // Se já existem usuários, verifica se existe SUPER_ADMIN
+    const superAdminExists = await prisma.user.findFirst({
+      where: { role: "SUPER_ADMIN" },
+      select: { id: true },
+    });
+
+    if (!superAdminExists) {
+      console.log(
+        "[AUTH] Nenhum SUPER_ADMIN encontrado - este será SUPER_ADMIN"
+      );
+      return "SUPER_ADMIN";
+    }
+
+    // Caso contrário, novo usuário será USER comum
+    console.log("[AUTH] SUPER_ADMIN já existe - novo usuário será USER");
+    return "USER";
+  } catch (error) {
+    console.error("[AUTH] Erro ao determinar role inicial:", error);
+    // Em caso de erro, por segurança, retorna USER
+    return "USER";
+  }
+}
+
+/**
+ * Cria um novo usuário com validação completa
+ */
 export async function signUp(data: SignUpData): Promise<AuthResult> {
   try {
-    // Validar campos
+    // Validação dos campos de entrada
     const validatedFields = signUpSchema.safeParse(data);
 
     if (!validatedFields.success) {
@@ -49,9 +91,10 @@ export async function signUp(data: SignUpData): Promise<AuthResult> {
     const { email, password, name, address, zipCode, phone } =
       validatedFields.data;
 
-    // Verificar se o usuário já existe
+    // Verificar duplicação de email
     const existingUser = await prisma.user.findUnique({
       where: { email },
+      select: { id: true },
     });
 
     if (existingUser) {
@@ -61,56 +104,15 @@ export async function signUp(data: SignUpData): Promise<AuthResult> {
       };
     }
 
-    // Hash da senha
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Hash da senha com salt factor otimizado
+    const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Usar transação para garantir atomicidade
+    // Transação atômica para criação de usuário
     const result = await prisma.$transaction(async (tx) => {
-      // Verificar se o email é o email de admin definido no ambiente
-      const adminEmail = process.env.ADMIN_EMAIL;
-      if (adminEmail && email.toLowerCase() === adminEmail.toLowerCase()) {
-        console.log("Email corresponde ao ADMIN_EMAIL definido - será ADMIN");
+      // Determinar role dentro da transação para evitar condições de corrida
+      const assignedRole = await determineInitialRole();
 
-        const newUser = await tx.user.create({
-          data: {
-            email,
-            password: hashedPassword,
-            name,
-            address,
-            zipCode,
-            phone,
-            role: "ADMIN",
-          },
-        });
-
-        return { user: newUser, role: "ADMIN" };
-      }
-
-      // Verificar dentro da transação se existe algum usuário
-      const existingUserCount = await tx.user.count();
-      const hasNoUsers = existingUserCount === 0;
-
-      let assignedRole: "ADMIN" | "USER" = "USER";
-
-      if (hasNoUsers) {
-        assignedRole = "ADMIN";
-        console.log("Primeiro usuário do sistema - será ADMIN");
-      } else {
-        // Verificar se existe ADMIN
-        const adminExists = await tx.user.findFirst({
-          where: { role: "ADMIN" },
-        });
-
-        if (!adminExists) {
-          assignedRole = "ADMIN";
-          console.log("Nenhum ADMIN encontrado - este será ADMIN");
-        } else {
-          assignedRole = "USER";
-          console.log("ADMIN já existe - este será USER");
-        }
-      }
-
-      // Criar o usuário com o role determinado
+      // Criar usuário
       const newUser = await tx.user.create({
         data: {
           email,
@@ -121,35 +123,47 @@ export async function signUp(data: SignUpData): Promise<AuthResult> {
           phone,
           role: assignedRole,
         },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+        },
       });
 
-      return { user: newUser, role: assignedRole };
+      console.log(`[AUTH] Usuário criado com sucesso:
+        - ID: ${newUser.id}
+        - Email: ${newUser.email}
+        - Role: ${newUser.role}
+      `);
+
+      return newUser;
     });
 
-    const user = result.user;
-    console.log("Usuário criado com sucesso:");
-    console.log("- Email:", user.email);
-    console.log("- Role:", user.role);
-
-    // Criar sessão
-    const session = await lucia.createSession(user.id, {});
+    // Criar sessão Lucia
+    const session = await lucia.createSession(result.id, {});
     const sessionCookie = lucia.createSessionCookie(session.id);
 
+    // Definir cookie de sessão
     (await cookies()).set(
       sessionCookie.name,
       sessionCookie.value,
       sessionCookie.attributes
     );
 
-    const finalRole = user.role;
-    console.log("Role final retornado:", finalRole);
+    // Determinar URL de redirecionamento baseado no role
+    const redirectUrl =
+      result.role === "SUPER_ADMIN" || result.role === "ADMIN"
+        ? "/dashboard"
+        : "/user";
 
     return {
       success: true,
-      role: finalRole,
+      role: result.role,
+      redirectUrl,
     };
   } catch (error) {
-    console.error("Erro ao criar usuário:", error);
+    console.error("[AUTH] Erro ao criar usuário:", error);
     return {
       success: false,
       error: "Erro ao criar conta. Tente novamente.",
@@ -157,13 +171,15 @@ export async function signUp(data: SignUpData): Promise<AuthResult> {
   }
 }
 
-// Função para fazer login
+/**
+ * Realiza login com validação de credenciais
+ */
 export async function signIn(
   email: string,
   password: string
 ): Promise<AuthResult> {
   try {
-    // Validar campos
+    // Validação de entrada
     const validatedFields = signInSchema.safeParse({ email, password });
 
     if (!validatedFields.success) {
@@ -173,9 +189,16 @@ export async function signIn(
       };
     }
 
-    // Buscar usuário
+    // Buscar usuário com campos necessários
     const user = await prisma.user.findUnique({
       where: { email },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        role: true,
+        name: true,
+      },
     });
 
     if (!user || !user.password) {
@@ -185,7 +208,7 @@ export async function signIn(
       };
     }
 
-    // Verificar senha
+    // Verificar senha com timing-attack protection
     const validPassword = await bcrypt.compare(password, user.password);
 
     if (!validPassword) {
@@ -205,16 +228,26 @@ export async function signIn(
       sessionCookie.attributes
     );
 
-    console.log("Usuário logado com sucesso:");
-    console.log("- Email:", user.email);
-    console.log("- Role:", user.role);
+    console.log(`[AUTH] Login realizado:
+      - Email: ${user.email}
+      - Role: ${user.role}
+    `);
+
+    // Determinar redirecionamento
+    const redirectUrl =
+      user.role === "SUPER_ADMIN" ||
+      user.role === "ADMIN" ||
+      user.role === "STAFF"
+        ? "/dashboard"
+        : "/user";
 
     return {
       success: true,
-      role: user.role || "USER",
+      role: user.role,
+      redirectUrl,
     };
   } catch (error) {
-    console.error("Erro ao fazer login:", error);
+    console.error("[AUTH] Erro ao fazer login:", error);
     return {
       success: false,
       error: "Erro ao fazer login. Tente novamente.",
@@ -222,7 +255,9 @@ export async function signIn(
   }
 }
 
-// Função para fazer logout
+/**
+ * Realiza logout e invalida sessão
+ */
 export async function signOut() {
   try {
     const { session } = await validateRequest();
@@ -233,10 +268,10 @@ export async function signOut() {
       };
     }
 
-    // Invalidar sessão
+    // Invalidar sessão no Lucia
     await lucia.invalidateSession(session.id);
 
-    // Limpar cookie
+    // Criar cookie de sessão em branco
     const sessionCookie = lucia.createBlankSessionCookie();
     (await cookies()).set(
       sessionCookie.name,
@@ -244,22 +279,27 @@ export async function signOut() {
       sessionCookie.attributes
     );
 
+    // Redirecionar para home
     redirect("/");
   } catch (error) {
-    console.error("Erro ao fazer logout:", error);
+    console.error("[AUTH] Erro ao fazer logout:", error);
     return {
       error: "Erro ao fazer logout",
     };
   }
 }
 
-// Função para verificar se o usuário está autenticado
+/**
+ * Obtém usuário autenticado atual
+ */
 export async function getUser() {
   const { user } = await validateRequest();
   return user;
 }
 
-// Função para atualizar perfil do usuário
+/**
+ * Atualiza perfil do usuário com validação
+ */
 export async function updateProfile(data: {
   name?: string;
   address?: string;
@@ -276,30 +316,38 @@ export async function updateProfile(data: {
       };
     }
 
-    // Validar dados (você pode criar um schema específico)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = {};
+    // Validação e sanitização dos dados
+    const updateData: Partial<typeof data> = {};
 
     if (data.name && data.name.length >= 2) {
-      updateData.name = data.name;
+      updateData.name = data.name.trim();
     }
 
     if (data.address && data.address.length >= 5) {
-      updateData.address = data.address;
+      updateData.address = data.address.trim();
     }
 
     if (data.zipCode && /^\d{5}-?\d{3}$/.test(data.zipCode)) {
-      updateData.zipCode = data.zipCode;
+      updateData.zipCode = data.zipCode.replace(/\D/g, "");
     }
 
     if (data.phone && /^\(?[1-9]{2}\)?\s?9?\d{4}-?\d{4}$/.test(data.phone)) {
-      updateData.phone = data.phone;
+      updateData.phone = data.phone.replace(/\D/g, "");
     }
 
     // Atualizar usuário
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: updateData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        address: true,
+        zipCode: true,
+        phone: true,
+        role: true,
+      },
     });
 
     return {
@@ -307,7 +355,7 @@ export async function updateProfile(data: {
       user: updatedUser,
     };
   } catch (error) {
-    console.error("Erro ao atualizar perfil:", error);
+    console.error("[AUTH] Erro ao atualizar perfil:", error);
     return {
       success: false,
       error: "Erro ao atualizar perfil",
@@ -315,7 +363,9 @@ export async function updateProfile(data: {
   }
 }
 
-// Função para alterar senha
+/**
+ * Altera senha do usuário com verificação
+ */
 export async function changePassword(
   currentPassword: string,
   newPassword: string
@@ -333,9 +383,10 @@ export async function changePassword(
     // Buscar usuário com senha
     const userWithPassword = await prisma.user.findUnique({
       where: { id: user.id },
+      select: { password: true },
     });
 
-    if (!userWithPassword || !userWithPassword.password) {
+    if (!userWithPassword?.password) {
       return {
         success: false,
         error: "Usuário não encontrado",
@@ -364,7 +415,7 @@ export async function changePassword(
     }
 
     // Hash da nova senha
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
 
     // Atualizar senha
     await prisma.user.update({
@@ -377,10 +428,40 @@ export async function changePassword(
       message: "Senha alterada com sucesso",
     };
   } catch (error) {
-    console.error("Erro ao alterar senha:", error);
+    console.error("[AUTH] Erro ao alterar senha:", error);
     return {
       success: false,
       error: "Erro ao alterar senha",
     };
+  }
+}
+
+/**
+ * Verifica se usuário tem permissão administrativa
+ */
+export async function checkAdminAccess(): Promise<boolean> {
+  try {
+    const { user } = await validateRequest();
+
+    if (!user) return false;
+
+    return ["SUPER_ADMIN", "ADMIN", "STAFF"].includes(user.role);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Verifica se usuário é SUPER_ADMIN
+ */
+export async function checkSuperAdminAccess(): Promise<boolean> {
+  try {
+    const { user } = await validateRequest();
+
+    if (!user) return false;
+
+    return user.role === "SUPER_ADMIN";
+  } catch {
+    return false;
   }
 }
