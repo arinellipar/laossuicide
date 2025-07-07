@@ -69,6 +69,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const router = useRouter();
 
   const loginForm = useForm<LoginData>({
@@ -85,9 +86,11 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     try {
       const result = await signIn(data.email, data.password);
+
       if (result.success) {
-        router.push("/dashboard");
-        onClose();
+        // Use a default role since the result doesn't include role information
+        const redirectUrl = "/user"; // Default to user page on successful login
+        window.location.href = redirectUrl;
       } else {
         setError((result.error as string) || "Erro ao fazer login");
       }
@@ -114,8 +117,10 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       });
 
       if (result.success) {
-        router.push("/dashboard");
-        onClose();
+        // Since the response doesn't include role information, we use a default role
+        const userRole = "USER";
+        const redirectUrl = userRole === "USER" ? "/user" : "/dashboard";
+        window.location.href = redirectUrl;
       } else {
         setError((result.error as string) || "Erro ao criar conta");
       }
