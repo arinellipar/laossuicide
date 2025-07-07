@@ -20,7 +20,9 @@ import {
   Music,
   Zap,
   Radio,
+  User,
 } from "lucide-react";
+import AuthModal from "./AuthModal";
 
 const LAOSLandingPage = () => {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -29,6 +31,7 @@ const LAOSLandingPage = () => {
   const [hoveredCard, setHoveredCard] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
   const [gpuEnabled, setGpuEnabled] = useState(true);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const { scrollY } = useScroll();
 
   const mouseX = useMotionValue(0);
@@ -257,8 +260,39 @@ const LAOSLandingPage = () => {
       <PerformanceMonitor />
       <FloatingParticles />
 
+      {/* Header com botão de login */}
+      <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-2xl bg-black/30 border-b border-purple-500/20">
+        <div className="max-w-6xl mx-auto px-4 md:px-8 py-4 flex justify-between items-center">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-center gap-2"
+          >
+            <Zap className="w-6 h-6 text-pink-500" />
+            <span className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-purple-500">
+              LAOS
+            </span>
+          </motion.div>
+
+          <motion.button
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setAuthModalOpen(true)}
+            className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-pink-500/20 to-purple-500/20 rounded-full backdrop-blur-xl border border-purple-500/30 hover:border-pink-500/50 transition-all"
+            style={{
+              boxShadow: "0 0 20px rgba(236, 72, 153, 0.3)",
+            }}
+          >
+            <User className="w-4 h-4" />
+            <span className="font-semibold">LOGIN</span>
+          </motion.button>
+        </div>
+      </header>
+
       {/* Futuristic Hero Section */}
-      <section className="relative h-screen flex items-center justify-center overflow-hidden">
+      <section className="relative h-screen flex items-center justify-center overflow-hidden pt-20">
         <GlowingGrid />
 
         <motion.div
@@ -1293,6 +1327,12 @@ const LAOSLandingPage = () => {
           </motion.p>
         </div>
       </footer>
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+      />
 
       <style jsx>{`
         @keyframes shimmer {

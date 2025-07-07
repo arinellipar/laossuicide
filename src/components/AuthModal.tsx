@@ -56,7 +56,7 @@ interface InputFieldProps {
   type?: string;
   placeholder: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  register: any; // Using any as a quick fix, but a more precise type would be better
+  register: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   error?: any;
   showToggle?: boolean;
@@ -89,10 +89,10 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         router.push("/dashboard");
         onClose();
       } else {
-        setError(result.error || "Erro ao fazer login");
+        setError((result.error as string) || "Erro ao fazer login");
       }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (err) {
+      console.error(err);
       setError("Erro inesperado. Tente novamente.");
     } finally {
       setIsLoading(false);
@@ -117,10 +117,10 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         router.push("/dashboard");
         onClose();
       } else {
-        setError(result.error || "Erro ao criar conta");
+        setError((result.error as string) || "Erro ao criar conta");
       }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (err) {
+      console.error(err);
       setError("Erro inesperado. Tente novamente.");
     } finally {
       setIsLoading(false);
