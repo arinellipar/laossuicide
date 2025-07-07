@@ -7,15 +7,15 @@ export default function BiografiaPage() {
   const members = [
     {
       name: "Mitsuo Awada",
-      role: "Vocalista / Guitarrista",
-      bio: "Fundador da banda, Alex traz a energia cyberpunk com vocais poderosos e riffs futuristas.",
+      role: "Lead Guitar / Backing Vocals",
+      bio: "Fundador da banda, Mitsuo traz a energia cyberpunk com vocais poderosos e riffs futuristas.",
       image:
         "https://images.unsplash.com/photo-1540569014015-19a7be504e3b?w=400&h=400&fit=crop",
       social: "@alexstorm",
     },
     {
       name: "Koy Void",
-      role: "Baixista / Backing Vocal",
+      role: "Baixista / Lead Vocal",
       bio: "Com grooves pesados e linhas melódicas únicas, Luna é o coração pulsante da banda.",
       image:
         "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop",
@@ -23,7 +23,7 @@ export default function BiografiaPage() {
     },
     {
       name: "Kai Binary",
-      role: "Baterista",
+      role: "Drummer",
       bio: "Precisão mecânica com alma humana, Kai define o ritmo frenético do LAOS.",
       image:
         "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&h=400&fit=crop",
@@ -31,7 +31,7 @@ export default function BiografiaPage() {
     },
     {
       name: "Nova Synth",
-      role: "Sintetizadores / Programação",
+      role: "Synthesizer / Sound Designer",
       bio: "Mestre dos sons eletrônicos, Nova cria as paisagens sonoras futuristas da banda.",
       image:
         "https://images.unsplash.com/photo-1508341591423-4347099e1f19?w=400&h=400&fit=crop",
@@ -57,7 +57,7 @@ export default function BiografiaPage() {
       >
         <h1 className="text-5xl md:text-7xl font-black mb-8 text-center">
           <span className="bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500">
-            A HISTÓRIA DO LAOS
+            A HISTÓRIA DA LAOS
           </span>
         </h1>
 
@@ -73,9 +73,9 @@ export default function BiografiaPage() {
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
           <div className="absolute bottom-8 left-8 right-8">
             <p className="text-xl md:text-2xl text-gray-300 max-w-3xl">
-              Nascidos das sombras neon de São Paulo, LAOS é mais que uma banda
-              - é uma revolução sonora que desafia os limites entre o humano e o
-              digital.
+              Nascidos das sombras neon do Rio de Janeiro, LAOS é mais que uma
+              banda - é uma revolução sonora que desafia os limites entre o
+              humano e o digital.
             </p>
           </div>
         </div>
