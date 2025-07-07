@@ -17,6 +17,9 @@ model User {
   image         String?
   name          String?
   password      String? // For credential-based auth
+  address       String?
+  zipCode       String?
+  phone         String?
   role          UserRole  @default(USER)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
