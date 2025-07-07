@@ -81,7 +81,7 @@ export default function DashboardPage() {
           </span>
         </h1>
         <p className="text-xl text-gray-400">
-          Gerencie o império cyberpunk do LAOS
+          Gerencie o Império Cyberpunk da LAOS
         </p>
       </motion.div>
 
