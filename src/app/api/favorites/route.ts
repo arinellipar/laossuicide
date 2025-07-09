@@ -91,10 +91,24 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    const summary = calculateCartSummary(items);
+    // Add missing product fields with default values to satisfy CartItemWithProduct type
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const itemsWithDefaults = items.map((item: any) => ({
+      ...item,
+      product: {
+        ...item.product,
+        createdAt: new Date(0),
+        updatedAt: new Date(0),
+        stripeProductId: "",
+        stripePriceId: "",
+        metadata: {},
+      },
+    }));
+
+    const summary = calculateCartSummary(itemsWithDefaults);
 
     const response: CartResponse = {
-      items,
+      items: itemsWithDefaults,
       summary,
       lastUpdated: new Date(),
     };
@@ -150,7 +164,7 @@ export async function POST(request: NextRequest) {
 
         // Start transaction to add item to cart
         const result = await prisma.$transaction(
-          async (tx) => {
+          async (tx: Prisma.TransactionClient) => {
             console.log('[API] Starting database transaction');
 
             // Verificar produto
