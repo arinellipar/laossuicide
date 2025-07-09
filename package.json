@@ -35,6 +35,7 @@
     "@vercel/edge-functions-ui": "^0.2.1",
     "bcryptjs": "^3.0.2",
     "canvas-confetti": "^1.9.3",
+    "critters": "^0.0.25",
     "decimal.js": "^10.6.0",
     "framer-motion": "^12.19.2",
     "immer": "^10.1.1",
