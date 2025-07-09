@@ -2,7 +2,7 @@ import { Lucia } from "lucia";
 import { PrismaAdapter } from "@lucia-auth/adapter-prisma";
 import { PrismaClient } from "@prisma/client";
 import { cookies } from "next/headers";
-import { cache } from "react";
+// Removed React cache because per-request validation must not be memoized
 
 // ============= CONFIGURAÇÃO DO PRISMA =============
 const prisma = new PrismaClient({
@@ -72,59 +72,57 @@ export type User = {
  * Valida a requisição e retorna o usuário e sessão atuais
  * Usa cache do React para otimização de performance
  */
-export const validateRequest = cache(
-  async (): Promise<
-    { user: User; session: Session } | { user: null; session: null }
-  > => {
-    const cookieStore = await cookies();
-    const sessionId = cookieStore.get(lucia.sessionCookieName)?.value ?? null;
+export async function validateRequest(): Promise<
+  { user: User; session: Session } | { user: null; session: null }
+> {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get(lucia.sessionCookieName)?.value ?? null;
 
-    if (!sessionId) {
-      return {
-        user: null,
-        session: null,
-      };
-    }
-
-    try {
-      // Validar sessão com Lucia
-      const result = await lucia.validateSession(sessionId);
-
-      // Se a sessão for nova (fresh), atualizar cookie
-      if (result.session && result.session.fresh) {
-        const sessionCookie = lucia.createSessionCookie(result.session.id);
-        cookieStore.set(
-          sessionCookie.name,
-          sessionCookie.value,
-          sessionCookie.attributes
-        );
-      }
-
-      // Se não houver sessão, limpar cookie
-      if (!result.session) {
-        const sessionCookie = lucia.createBlankSessionCookie();
-        cookieStore.set(
-          sessionCookie.name,
-          sessionCookie.value,
-          sessionCookie.attributes
-        );
-      }
-
-      return result.session
-        ? {
-            user: result.user as User,
-            session: result.session as Session,
-          }
-        : {
-            user: null,
-            session: null,
-          };
-    } catch (error) {
-      console.error("[LUCIA] Erro ao validar sessão:", error);
-      return {
-        user: null,
-        session: null,
-      };
-    }
+  if (!sessionId) {
+    return {
+      user: null,
+      session: null,
+    };
   }
-);
+
+  try {
+    // Validar sessão com Lucia
+    const result = await lucia.validateSession(sessionId);
+
+    // Se a sessão for nova (fresh), atualizar cookie
+    if (result.session && result.session.fresh) {
+      const sessionCookie = lucia.createSessionCookie(result.session.id);
+      cookieStore.set(
+        sessionCookie.name,
+        sessionCookie.value,
+        sessionCookie.attributes
+      );
+    }
+
+    // Se não houver sessão, limpar cookie
+    if (!result.session) {
+      const sessionCookie = lucia.createBlankSessionCookie();
+      cookieStore.set(
+        sessionCookie.name,
+        sessionCookie.value,
+        sessionCookie.attributes
+      );
+    }
+
+    return result.session
+      ? {
+          user: result.user as User,
+          session: result.session as Session,
+        }
+      : {
+          user: null,
+          session: null,
+        };
+  } catch (error) {
+    console.error("[LUCIA] Erro ao validar sessão:", error);
+    return {
+      user: null,
+      session: null,
+    };
+  }
+}
