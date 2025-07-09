@@ -52,11 +52,9 @@ const nextConfig = {
       };
     }
 
-    // Otimizações para Zustand e Immer
+    // Remove problematic aliases - let webpack handle zustand naturally
     config.resolve.alias = {
       ...config.resolve.alias,
-      immer: require.resolve("immer"),
-      zustand: require.resolve("zustand"),
     };
 
     // Configurações para melhorar a compatibilidade
@@ -83,7 +81,7 @@ const nextConfig = {
     swcPlugins: [],
     // Otimizações de build
     optimizeCss: true,
-    optimizePackageImports: ["zustand", "immer", "framer-motion"],
+    optimizePackageImports: ["framer-motion"],
   },
 
   // Configurações para melhorar a performance
