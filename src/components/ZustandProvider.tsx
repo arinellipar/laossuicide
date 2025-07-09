@@ -15,17 +15,31 @@ export default function ZustandProvider({ children }: ZustandProviderProps) {
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    // Aguarda a hidratação completa do store
-    const unsubscribe = useCartStore.persist.onFinishHydration(() => {
-      setIsHydrated(true);
-    });
+    /**
+     * Nem todas as versões do middleware "persist" expõem os helpers
+     * `onFinishHydration` e `hasHydrated`. Caso eles não existam,
+     * consideramos a hidratação concluída logo após o first mount
+     * para evitar que a aplicação fique presa eternamente na tela de loading.
+     */
 
-    // Se já foi hidratado (caso seja chamado após hidratação)
-    if (useCartStore.persist.hasHydrated()) {
-      setIsHydrated(true);
+    const persistHelpers = (useCartStore as any).persist;
+
+    // Caso existam helpers de hidratação, utiliza-os.
+    if (persistHelpers?.onFinishHydration) {
+      const unsubscribe = persistHelpers.onFinishHydration(() => {
+        setIsHydrated(true);
+      });
+
+      // Hidratação já concluída antes do mount
+      if (typeof persistHelpers.hasHydrated === "function" && persistHelpers.hasHydrated()) {
+        setIsHydrated(true);
+      }
+
+      return unsubscribe;
     }
 
-    return unsubscribe;
+    // Fallback: marca como hidratado imediatamente
+    setIsHydrated(true);
   }, []);
 
   // Durante a hidratação, renderiza loading ou placeholder
