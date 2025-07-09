@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useEffect, useState } from "react";
 import { useCartStore } from "@/stores/cartStore";
 
@@ -22,7 +23,15 @@ export default function ZustandProvider({ children }: ZustandProviderProps) {
      * para evitar que a aplicação fique presa eternamente na tela de loading.
      */
 
-    const persistHelpers = (useCartStore as any).persist;
+    // Tipagem opcional para os helpers retornados por `persist`
+    type PersistHelpers = {
+      onFinishHydration?: (cb: () => void) => () => void;
+      hasHydrated?: () => boolean;
+    };
+
+    const persistHelpers: PersistHelpers | undefined = (useCartStore as unknown as {
+      persist?: PersistHelpers;
+    }).persist;
 
     // Caso existam helpers de hidratação, utiliza-os.
     if (persistHelpers?.onFinishHydration) {
@@ -31,15 +40,19 @@ export default function ZustandProvider({ children }: ZustandProviderProps) {
       });
 
       // Hidratação já concluída antes do mount
-      if (typeof persistHelpers.hasHydrated === "function" && persistHelpers.hasHydrated()) {
+      if (persistHelpers.hasHydrated?.()) {
         setIsHydrated(true);
       }
 
+      // Cleanup function
       return unsubscribe;
     }
 
     // Fallback: marca como hidratado imediatamente
     setIsHydrated(true);
+
+    // Nenhum cleanup necessário no fallback
+    return undefined;
   }, []);
 
   // Durante a hidratação, renderiza loading ou placeholder
