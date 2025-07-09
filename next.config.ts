@@ -41,6 +41,11 @@ const nextConfig = {
       ".js": [".ts", ".tsx", ".js"],
       ".jsx": [".tsx", ".jsx"],
     };
+    
+    // Configurar para melhor suporte ao exports field do package.json
+    config.resolve.conditionNames = ['require', 'node', 'default'];
+    config.resolve.mainFields = ['main', 'module'];
+    config.resolve.exportsFields = ['exports'];
 
     // Configurações específicas para o cliente
     if (!isServer) {
@@ -52,11 +57,10 @@ const nextConfig = {
       };
     }
 
-    // Otimizações para Zustand e Immer
+    // Otimizações para Zustand e Immer com resolução específica de submodules
     config.resolve.alias = {
       ...config.resolve.alias,
       immer: require.resolve("immer"),
-      zustand: require.resolve("zustand"),
     };
 
     // Configurações para melhorar a compatibilidade
@@ -74,6 +78,22 @@ const nextConfig = {
       },
     });
 
+    // Fix para resolução de modules do Zustand
+    if (!config.resolve.modules) {
+      config.resolve.modules = [];
+    }
+    config.resolve.modules.push('node_modules');
+
+    // Desabilitar barrel optimization para Zustand
+    if (config.optimization && config.optimization.providedExports) {
+      config.optimization.providedExports = false;
+    }
+
+    // Configurações específicas para lidar com problemas de submodule do Zustand
+    if (!config.externals) {
+      config.externals = [];
+    }
+
     return config;
   },
 
@@ -83,7 +103,8 @@ const nextConfig = {
     swcPlugins: [],
     // Otimizações de build
     optimizeCss: true,
-    optimizePackageImports: ["zustand", "immer", "framer-motion"],
+    // Desabilitar otimizações que podem causar problemas com Zustand
+    optimizePackageImports: ["framer-motion"],
   },
 
   // Configurações para melhorar a performance
