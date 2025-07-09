@@ -13,19 +13,38 @@ interface ZustandProviderProps {
  */
 export default function ZustandProvider({ children }: ZustandProviderProps) {
   const [isHydrated, setIsHydrated] = useState(false);
+  const [hasTimeout, setHasTimeout] = useState(false);
 
   useEffect(() => {
-    // Aguarda a hidratação completa do store
-    const unsubscribe = useCartStore.persist.onFinishHydration(() => {
+    // Timeout fallback para evitar loading infinito
+    const timeoutId = setTimeout(() => {
+      console.warn("[ZustandProvider] Hydration timeout, proceeding anyway");
+      setHasTimeout(true);
       setIsHydrated(true);
-    });
+    }, 3000); // 3 segundos de timeout
 
-    // Se já foi hidratado (caso seja chamado após hidratação)
-    if (useCartStore.persist.hasHydrated()) {
-      setIsHydrated(true);
+    try {
+      // Aguarda a hidratação completa do store
+      const unsubscribe = useCartStore.persist.onFinishHydration(() => {
+        clearTimeout(timeoutId);
+        setIsHydrated(true);
+      });
+
+      // Se já foi hidratado (caso seja chamado após hidratação)
+      if (useCartStore.persist.hasHydrated()) {
+        clearTimeout(timeoutId);
+        setIsHydrated(true);
+      }
+
+      return () => {
+        clearTimeout(timeoutId);
+        unsubscribe();
+      };
+    } catch (error) {
+      console.error("[ZustandProvider] Hydration error:", error);
+      clearTimeout(timeoutId);
+      setIsHydrated(true); // Proceed anyway to prevent infinite loading
     }
-
-    return unsubscribe;
   }, []);
 
   // Durante a hidratação, renderiza loading ou placeholder
@@ -37,6 +56,11 @@ export default function ZustandProvider({ children }: ZustandProviderProps) {
         </div>
       </div>
     );
+  }
+
+  // Log warning se foi devido ao timeout
+  if (hasTimeout) {
+    console.warn("[ZustandProvider] Proceeded due to timeout - cart state may not be fully hydrated");
   }
 
   return <>{children}</>;
