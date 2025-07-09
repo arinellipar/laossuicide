@@ -2,35 +2,30 @@
 /**
  * @module useCart
  * @description Hook customizado para operações de carrinho com React Query
- *
- * Features:
- * - Optimistic updates para UX instantânea
- * - Cache management com invalidação inteligente
- * - Error handling com retry automático
- * - Background refetching para sincronização
- * - Debouncing de operações
- * - Type-safe com TypeScript generics
- *
- * Patterns:
- * - Facade Pattern para simplificar API
- * - Observer Pattern via React Query
- * - Command Pattern para operações
- * - Strategy Pattern para error handling
+ * Corrigido para funcionar com as APIs implementadas
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCartStore } from "@/stores/cartStore";
 import { toast } from "react-hot-toast";
-import type { Product } from "@prisma/client";
 import { useCallback, useMemo } from "react";
+import { Prisma } from "@prisma/client";
 
 // ============= TYPE DEFINITIONS =============
 interface CartItem {
   id: string;
   productId: string;
   quantity: number;
-  product: Product;
-  subtotal: number;
+  product: {
+    id: string;
+    name: string;
+    image: string;
+    description: string;
+    price: Prisma.Decimal;
+    category: string;
+    inStock: boolean;
+    stockQuantity: number;
+  };
+  subtotal?: number;
 }
 
 interface CartSummary {
@@ -61,7 +56,7 @@ interface UseCartReturn {
   formattedTotal: string;
 
   // Actions
-  addItem: (product: Product, quantity?: number) => Promise<void>;
+  addItem: (product: any, quantity?: number) => Promise<void>;
   removeItem: (productId: string) => Promise<void>;
   updateQuantity: (productId: string, quantity: number) => Promise<void>;
   clearCart: () => Promise<void>;
@@ -74,10 +69,6 @@ interface UseCartReturn {
 }
 
 // ============= API CLIENT =============
-/**
- * Cliente API tipado para operações de carrinho
- * Centraliza lógica de fetch e tratamento de erros
- */
 class CartAPI {
   private static async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
@@ -111,10 +102,7 @@ class CartAPI {
     return this.handleResponse(response);
   }
 
-  static async updateItem(
-    productId: string,
-    quantity: number
-  ): Promise<CartResponse> {
+  static async updateItem(productId: string, quantity: number): Promise<any> {
     const response = await fetch(`/api/cart/${productId}`, {
       method: "PATCH",
       credentials: "include",
@@ -123,7 +111,7 @@ class CartAPI {
       },
       body: JSON.stringify({ quantity }),
     });
-    return this.handleResponse<CartResponse>(response);
+    return this.handleResponse(response);
   }
 
   static async removeItem(productId: string): Promise<any> {
@@ -141,32 +129,14 @@ class CartAPI {
     });
     return this.handleResponse(response);
   }
-
-  static async syncCart(
-    items: Array<{ productId: string; quantity: number }>
-  ): Promise<any> {
-    const response = await fetch("/api/cart/sync", {
-      method: "PUT",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ items }),
-    });
-    return this.handleResponse(response);
-  }
 }
 
 // ============= QUERY KEYS =============
 const QUERY_KEYS = {
   cart: ["cart"] as const,
-  cartItem: (productId: string) => ["cart", "item", productId] as const,
 } as const;
 
 // ============= TOAST NOTIFICATIONS =============
-/**
- * Notificações customizadas com branding LAOS
- */
 const showToast = {
   success: (message: string) => {
     toast.success(message, {
@@ -191,61 +161,18 @@ const showToast = {
       },
     });
   },
-
-  loading: (message: string) => {
-    return toast.loading(message, {
-      style: {
-        background: "#1a1a1a",
-        color: "#fff",
-        border: "1px solid rgba(168, 85, 247, 0.3)",
-      },
-    });
-  },
 };
 
 // ============= MAIN HOOK =============
-/**
- * Hook principal para gerenciamento de carrinho
- * Combina local state (Zustand) com server state (React Query)
- *
- * @example
- * ```tsx
- * const cart = useCart();
- *
- * // Adicionar item
- * await cart.addItem(product, 2);
- *
- * // Verificar se item está no carrinho
- * const inCart = cart.isItemInCart(productId);
- *
- * // Obter quantidade
- * const qty = cart.getItemQuantity(productId);
- * ```
- */
 export function useCart(): UseCartReturn {
   const queryClient = useQueryClient();
 
-  // Local state (Zustand)
-  const {
-    addItem: localAddItem,
-    removeItem: localRemoveItem,
-    updateQuantity: localUpdateQuantity,
-    clearCart: localClearCart,
-  } = useCartStore();
-
   // ===== QUERIES =====
-
-  /**
-   * Query principal do carrinho
-   * - Stale time de 5 minutos
-   * - Background refetch a cada 30 segundos
-   * - Retry 3x com backoff exponencial
-   */
   const cartQuery = useQuery({
     queryKey: QUERY_KEYS.cart,
     queryFn: CartAPI.getCart,
     staleTime: 5 * 60 * 1000, // 5 minutos
-    gcTime: 10 * 60 * 1000, // 10 minutos (anteriormente cacheTime)
+    gcTime: 10 * 60 * 1000, // 10 minutos
     refetchInterval: 30 * 1000, // 30 segundos
     refetchIntervalInBackground: true,
     retry: 3,
@@ -253,11 +180,6 @@ export function useCart(): UseCartReturn {
   });
 
   // ===== MUTATIONS =====
-
-  /**
-   * Mutation para adicionar item
-   * Implementa optimistic update
-   */
   const addItemMutation = useMutation({
     mutationFn: ({
       productId,
@@ -268,34 +190,28 @@ export function useCart(): UseCartReturn {
     }) => CartAPI.addItem(productId, quantity),
 
     onMutate: async ({ productId, quantity }) => {
-      // Cancelar queries pendentes
       await queryClient.cancelQueries({ queryKey: QUERY_KEYS.cart });
-
-      // Snapshot do estado anterior
       const previousCart = queryClient.getQueryData<CartResponse>(
         QUERY_KEYS.cart
       );
 
-      // Optimistic update no React Query
+      // Optimistic update
       if (previousCart) {
         queryClient.setQueryData<CartResponse>(QUERY_KEYS.cart, (old) => {
           if (!old) return old;
 
-          // Simular adição do item
           const existingItemIndex = old.items.findIndex(
             (item) => item.productId === productId
           );
 
           let newItems;
           if (existingItemIndex >= 0) {
-            // Atualizar quantidade existente
             newItems = [...old.items];
             newItems[existingItemIndex] = {
               ...newItems[existingItemIndex],
               quantity: newItems[existingItemIndex].quantity + quantity,
             };
           } else {
-            // Adicionar novo item (sem dados completos do produto)
             newItems = [...old.items];
           }
 
@@ -314,11 +230,9 @@ export function useCart(): UseCartReturn {
     },
 
     onError: (err, variables, context) => {
-      // Reverter optimistic update
       if (context?.previousCart) {
         queryClient.setQueryData(QUERY_KEYS.cart, context.previousCart);
       }
-
       showToast.error(
         err instanceof Error ? err.message : "Erro ao adicionar item"
       );
@@ -329,25 +243,19 @@ export function useCart(): UseCartReturn {
     },
 
     onSettled: () => {
-      // Sempre refetch para garantir consistência
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.cart });
     },
   });
 
-  /**
-   * Mutation para remover item
-   */
   const removeItemMutation = useMutation({
     mutationFn: CartAPI.removeItem,
 
     onMutate: async (productId) => {
       await queryClient.cancelQueries({ queryKey: QUERY_KEYS.cart });
-
       const previousCart = queryClient.getQueryData<CartResponse>(
         QUERY_KEYS.cart
       );
 
-      // Optimistic update
       if (previousCart) {
         queryClient.setQueryData<CartResponse>(QUERY_KEYS.cart, (old) => {
           if (!old) return old;
@@ -389,9 +297,6 @@ export function useCart(): UseCartReturn {
     },
   });
 
-  /**
-   * Mutation para atualizar quantidade
-   */
   const updateQuantityMutation = useMutation({
     mutationFn: ({
       productId,
@@ -403,12 +308,10 @@ export function useCart(): UseCartReturn {
 
     onMutate: async ({ productId, quantity }) => {
       await queryClient.cancelQueries({ queryKey: QUERY_KEYS.cart });
-
       const previousCart = queryClient.getQueryData<CartResponse>(
         QUERY_KEYS.cart
       );
 
-      // Optimistic update
       if (previousCart) {
         queryClient.setQueryData<CartResponse>(QUERY_KEYS.cart, (old) => {
           if (!old) return old;
@@ -451,20 +354,15 @@ export function useCart(): UseCartReturn {
     },
   });
 
-  /**
-   * Mutation para limpar carrinho
-   */
   const clearCartMutation = useMutation({
     mutationFn: CartAPI.clearCart,
 
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: QUERY_KEYS.cart });
-
       const previousCart = queryClient.getQueryData<CartResponse>(
         QUERY_KEYS.cart
       );
 
-      // Optimistic update
       queryClient.setQueryData<CartResponse>(QUERY_KEYS.cart, (old) => {
         if (!old) return old;
 
@@ -501,10 +399,9 @@ export function useCart(): UseCartReturn {
   });
 
   // ===== ACTIONS =====
-
   const addItem = useCallback(
-    async (product: Product, quantity: number = 1) => {
-      // Validação local primeiro
+    async (product: any, quantity: number = 1) => {
+      // Validação local
       const currentItem = cartQuery.data?.items.find(
         (item) => item.productId === product.id
       );
@@ -521,21 +418,16 @@ export function useCart(): UseCartReturn {
         return;
       }
 
-      // Atualizar local state imediatamente
-      localAddItem(product, quantity);
-
-      // Sincronizar com servidor
       await addItemMutation.mutateAsync({ productId: product.id, quantity });
     },
-    [cartQuery.data, localAddItem, addItemMutation]
+    [cartQuery.data, addItemMutation]
   );
 
   const removeItem = useCallback(
     async (productId: string) => {
-      localRemoveItem(productId);
       await removeItemMutation.mutateAsync(productId);
     },
-    [localRemoveItem, removeItemMutation]
+    [removeItemMutation]
   );
 
   const updateQuantity = useCallback(
@@ -544,10 +436,9 @@ export function useCart(): UseCartReturn {
         return removeItem(productId);
       }
 
-      localUpdateQuantity(productId, quantity);
       await updateQuantityMutation.mutateAsync({ productId, quantity });
     },
-    [localUpdateQuantity, updateQuantityMutation, removeItem]
+    [updateQuantityMutation, removeItem]
   );
 
   const clearCart = useCallback(async () => {
@@ -556,20 +447,19 @@ export function useCart(): UseCartReturn {
     );
     if (!confirmed) return;
 
-    localClearCart();
     await clearCartMutation.mutateAsync();
-  }, [localClearCart, clearCartMutation]);
+  }, [clearCartMutation]);
 
   const syncCart = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.cart });
   }, [queryClient]);
 
   // ===== COMPUTED VALUES =====
-
   const items = useMemo(
     () => cartQuery.data?.items || [],
     [cartQuery.data?.items]
   );
+
   const summary = cartQuery.data?.summary || {
     totalItems: 0,
     subtotal: 0,
@@ -580,6 +470,7 @@ export function useCart(): UseCartReturn {
 
   const isEmpty = items.length === 0;
   const itemCount = summary.totalItems;
+
   const formattedTotal = useMemo(() => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -588,7 +479,6 @@ export function useCart(): UseCartReturn {
   }, [summary.total]);
 
   // ===== HELPER FUNCTIONS =====
-
   const getItemQuantity = useCallback(
     (productId: string): number => {
       const item = items.find((item) => item.productId === productId);
@@ -611,8 +501,6 @@ export function useCart(): UseCartReturn {
     },
     [getItemQuantity]
   );
-
-  // ===== RETURN =====
 
   return {
     // State
@@ -639,20 +527,4 @@ export function useCart(): UseCartReturn {
     isItemInCart,
     canAddMore,
   };
-}
-
-// ============= PROVIDER COMPONENT =============
-/**
- * Provider opcional para configurações globais do carrinho
- * Pode ser usado para configurar toast, theme, etc.
- */
-export function CartProvider({ children }: { children: React.ReactNode }) {
-  // Sincronizar carrinho ao montar (usuário logado)
-  // const { syncCart } = useCart();
-
-  // useEffect(() => {
-  //   syncCart();
-  // }, [syncCart]);
-
-  return <>{children}</>;
 }

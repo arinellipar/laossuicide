@@ -446,6 +446,7 @@ export default function Cart({ isOpen, onClose }: CartProps) {
                                 key={item.id}
                                 item={{
                                   ...item,
+                                  subtotal: item.subtotal ?? (Number(item.product.price) * item.quantity),
                                   product: {
                                     ...item.product,
                                     price:

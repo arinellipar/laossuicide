@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import ZustandProvider from "@/components/ZustandProvider";
 
 export const metadata: Metadata = {
   title: "LAOS - Last Attempt On Suicide",
@@ -67,7 +68,9 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
       </head>
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        <ZustandProvider>{children}</ZustandProvider>
+      </body>
     </html>
   );
 }

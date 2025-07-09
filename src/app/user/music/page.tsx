@@ -151,7 +151,7 @@ export default function UserMusicPage() {
 
         <div className="grid md:grid-cols-3 gap-6">
           {[
-            { title: "Digital Void", year: 2024, type: "Single" },
+            { title: "Digital Void", year: 2025, type: "Single" },
             { title: "Neon Nights EP", year: 2023, type: "EP" },
             { title: "Last Breath", year: 2023, type: "Single" },
           ].map((single, index) => (

@@ -29,6 +29,8 @@ model User {
   orders    Order[]
   cartItems CartItem[]
   favorites Favorite[]
+
+  @@map("users")
 }
 
 model Session {
@@ -36,6 +38,8 @@ model Session {
   userId    String
   expiresAt DateTime
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
 }
 
 // ============= E-COMMERCE MODELS =============
@@ -51,7 +55,7 @@ model Product {
   stockQuantity   Int             @default(0)
   stripeProductId String?         @unique
   stripePriceId   String?         @unique
-  metadata        Json? // Para dados adicionais
+  metadata        Json?           @default("{}")
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
@@ -63,6 +67,8 @@ model Product {
   @@index([category])
   @@index([featured])
   @@index([inStock])
+  @@index([createdAt])
+  @@map("products")
 }
 
 model CartItem {
@@ -79,6 +85,8 @@ model CartItem {
 
   @@unique([userId, productId])
   @@index([userId])
+  @@index([productId])
+  @@map("cart_items")
 }
 
 model Order {
@@ -124,6 +132,8 @@ model Order {
   @@index([status])
   @@index([paymentStatus])
   @@index([stripeSessionId])
+  @@index([createdAt])
+  @@map("orders")
 }
 
 model OrderItem {
@@ -150,15 +160,17 @@ model PaymentLog {
   amount        Decimal? @db.Decimal(10, 2)
   currency      String?
   stripeEventId String?  @unique
-  rawData       Json // payload completo do stripe
+  rawData       Json     @default("{}")
   errorMessage  String?
   createdAt     DateTime @default(now())
 
   // Relations
-  order Order @relation(fields: [orderId], references: [id])
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([stripeEventId])
+  @@index([createdAt])
+  @@map("payment_logs")
 }
 
 model Favorite {
@@ -173,6 +185,8 @@ model Favorite {
 
   @@unique([userId, productId])
   @@index([userId])
+  @@index([productId])
+  @@map("favorites")
 }
 
 // ============= ENUMS =============
