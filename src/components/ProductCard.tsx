@@ -126,7 +126,30 @@ const ProductCard: React.FC<ProductCardProps> = memo(
         e.preventDefault();
         e.stopPropagation();
 
+        // Prevent duplicate requests
+        if (isAddingToCart) {
+          console.log('[ProductCard] Preventing duplicate add to cart request');
+          return;
+        }
+
+        // Detailed logging for debugging
+        console.log('[ProductCard] Adding to cart:', { 
+          productId: product.id, 
+          productName: product.name,
+          inStock: product.inStock, 
+          stockQuantity: product.stockQuantity,
+          price: product.price
+        });
+
+        // Pre-validation checks
+        if (!product.id) {
+          console.error('[ProductCard] Invalid product - missing ID');
+          toast.error("Produto inválido");
+          return;
+        }
+
         if (!product.inStock || product.stockQuantity <= 0) {
+          console.log('[ProductCard] Product out of stock');
           toast.error("Produto fora de estoque");
           return;
         }
@@ -154,6 +177,8 @@ const ProductCard: React.FC<ProductCardProps> = memo(
             1
           );
 
+          console.log('[ProductCard] Successfully added to cart:', product.id);
+          
           // Success feedback
           toast.success("Adicionado ao carrinho!", {
             style: {
@@ -163,13 +188,27 @@ const ProductCard: React.FC<ProductCardProps> = memo(
             },
           });
         } catch (error) {
-          console.error("Error adding to cart:", error);
-          toast.error("Erro ao adicionar ao carrinho");
+          console.error("[ProductCard] Add to cart error:", error);
+          
+          // More specific error messages
+          if (error instanceof Error) {
+            if (error.message.includes('Unauthorized') || error.message.includes('401')) {
+              toast.error('Faça login para adicionar itens ao carrinho');
+            } else if (error.message.includes('stock') || error.message.includes('estoque')) {
+              toast.error('Produto fora de estoque');
+            } else if (error.message.includes('limit') || error.message.includes('limite')) {
+              toast.error('Limite do carrinho atingido');
+            } else {
+              toast.error(`Erro ao adicionar ao carrinho: ${error.message}`);
+            }
+          } else {
+            toast.error("Erro ao adicionar ao carrinho");
+          }
         } finally {
           setIsAddingToCart(false);
         }
       },
-      [product, addItem]
+      [product, addItem, isAddingToCart]
     );
 
     const handleToggleFavorite = useCallback(
