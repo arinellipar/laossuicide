@@ -4,9 +4,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 // ============= AUTH MODELS =============
@@ -47,7 +46,7 @@ model Product {
   id              String          @id @default(cuid())
   name            String
   description     String
-  price           Decimal         @db.Decimal(10, 2)
+  price           Decimal
   category        ProductCategory
   image           String
   inStock         Boolean         @default(true)
@@ -55,7 +54,7 @@ model Product {
   stockQuantity   Int             @default(0)
   stripeProductId String?         @unique
   stripePriceId   String?         @unique
-  metadata        Json?           @default("{}")
+  metadata        Json?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
@@ -98,10 +97,10 @@ model Order {
   paymentMethod PaymentMethod?
 
   // Valores
-  subtotal Decimal @db.Decimal(10, 2)
-  tax      Decimal @default(0) @db.Decimal(10, 2)
-  shipping Decimal @default(0) @db.Decimal(10, 2)
-  total    Decimal @db.Decimal(10, 2)
+  subtotal Decimal
+  tax      Decimal @default(0)
+  shipping Decimal @default(0)
+  total    Decimal
 
   // Stripe
   stripeSessionId       String? @unique
@@ -141,8 +140,8 @@ model OrderItem {
   orderId   String
   productId String
   quantity  Int
-  price     Decimal @db.Decimal(10, 2) // Preço no momento da compra
-  total     Decimal @db.Decimal(10, 2)
+  price     Decimal // Preço no momento da compra
+  total     Decimal
 
   // Relations
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -157,10 +156,10 @@ model PaymentLog {
   orderId       String
   event         String // stripe event type
   status        String
-  amount        Decimal? @db.Decimal(10, 2)
+  amount        Decimal?
   currency      String?
   stripeEventId String?  @unique
-  rawData       Json     @default("{}")
+  rawData       Json
   errorMessage  String?
   createdAt     DateTime @default(now())
 
