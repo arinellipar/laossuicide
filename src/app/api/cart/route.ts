@@ -115,15 +115,23 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    console.log('[API] POST /api/cart - Request received');
+    
     const { user } = await validateRequest();
+    console.log('[API] Authentication check:', { authenticated: !!user, userId: user?.id });
+    
     if (!user) {
+      console.log('[API] Unauthorized - user not found');
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json();
+    console.log('[API] Request body:', body);
+    
     const validationResult = AddItemSchema.safeParse(body);
 
     if (!validationResult.success) {
+      console.log('[API] Validation failed:', validationResult.error.flatten());
       return NextResponse.json(
         {
           error: "Validation error",
@@ -134,28 +142,35 @@ export async function POST(request: NextRequest) {
     }
 
     const { productId, quantity } = validationResult.data;
+    console.log('[API] Adding to cart:', { userId: user.id, productId, quantity });
 
-    const result = await prisma.$transaction(
-      async (tx) => {
-        // Verificar produto
-        const product = await tx.product.findUnique({
-          where: { id: productId },
-          select: {
-            id: true,
-            name: true,
-            inStock: true,
-            stockQuantity: true,
-            price: true,
-          },
-        });
+          const result = await prisma.$transaction(
+        async (tx: typeof prisma) => {
+          console.log('[API] Starting database transaction');
+          
+          // Verificar produto
+          const product = await tx.product.findUnique({
+            where: { id: productId },
+            select: {
+              id: true,
+              name: true,
+              inStock: true,
+              stockQuantity: true,
+              price: true,
+            },
+          });
 
-        if (!product) {
-          throw new Error("Product not found");
-        }
+          console.log('[API] Product lookup result:', product);
 
-        if (!product.inStock) {
-          throw new Error("Product out of stock");
-        }
+          if (!product) {
+            console.log('[API] Product not found:', productId);
+            throw new Error("Product not found");
+          }
+
+          if (!product.inStock) {
+            console.log('[API] Product out of stock:', product);
+            throw new Error("Product out of stock");
+          }
 
         // Verificar item existente
         const existingItem = await tx.cartItem.findUnique({
@@ -217,6 +232,8 @@ export async function POST(request: NextRequest) {
       }
     );
 
+    console.log('[API] Transaction completed successfully');
+
     return NextResponse.json(
       {
         message: "Item added to cart",
@@ -228,9 +245,11 @@ export async function POST(request: NextRequest) {
     console.error("[CartAPI] POST error:", error);
 
     if (error instanceof Error) {
+      console.log('[API] Returning error response:', error.message);
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
+    console.log('[API] Returning generic error response');
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
