@@ -21,8 +21,10 @@ import {
   Zap,
   Radio,
   User,
+  ShoppingCart,
 } from "lucide-react";
 import AuthModal from "./AuthModal";
+import { useCart } from "@/hooks/useCart";
 
 const LAOSLandingPage = () => {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -33,6 +35,7 @@ const LAOSLandingPage = () => {
   const [gpuEnabled, setGpuEnabled] = useState(true);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const { scrollY } = useScroll();
+  const { itemCount } = useCart();
 
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
@@ -274,20 +277,47 @@ const LAOSLandingPage = () => {
             </span>
           </motion.div>
 
-          <motion.button
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setAuthModalOpen(true)}
-            className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-pink-500/20 to-purple-500/20 rounded-full backdrop-blur-xl border border-purple-500/30 hover:border-pink-500/50 transition-all"
-            style={{
-              boxShadow: "0 0 20px rgba(236, 72, 153, 0.3)",
-            }}
-          >
-            <User className="w-4 h-4" />
-            <span className="font-semibold">LOGIN</span>
-          </motion.button>
+          <div className="flex items-center gap-4">
+            {/* Products Link */}
+            <motion.a
+              href="/products"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="relative flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-pink-500/20 to-purple-500/20 rounded-full backdrop-blur-xl border border-purple-500/30 hover:border-pink-500/50 transition-all"
+              style={{
+                boxShadow: "0 0 20px rgba(236, 72, 153, 0.3)",
+              }}
+            >
+              <ShoppingCart className="w-4 h-4" />
+              <span className="font-semibold">PRODUTOS</span>
+              {itemCount > 0 && (
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-pink-500 rounded-full flex items-center justify-center"
+                >
+                  <span className="text-xs font-bold text-white">{itemCount}</span>
+                </motion.div>
+              )}
+            </motion.a>
+
+            <motion.button
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setAuthModalOpen(true)}
+              className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-pink-500/20 to-purple-500/20 rounded-full backdrop-blur-xl border border-purple-500/30 hover:border-pink-500/50 transition-all"
+              style={{
+                boxShadow: "0 0 20px rgba(236, 72, 153, 0.3)",
+              }}
+            >
+              <User className="w-4 h-4" />
+              <span className="font-semibold">LOGIN</span>
+            </motion.button>
+          </div>
         </div>
       </header>
 
@@ -428,9 +458,14 @@ const LAOSLandingPage = () => {
             transition={{ delay: 1, duration: 1 }}
             className="mt-12 flex justify-center gap-4"
           >
-            {["MUSIC", "SHOWS", "MERCH"].map((text) => (
-              <motion.div
+            {[
+              { text: "MUSIC", href: "#" },
+              { text: "SHOWS", href: "#" },
+              { text: "MERCH", href: "/products" },
+            ].map(({ text, href }) => (
+              <motion.a
                 key={text}
+                href={href}
                 whileHover={{ scale: 1.1, y: -5 }}
                 className="px-6 py-3 border border-pink-500/50 rounded-full backdrop-blur-xl bg-gradient-to-r from-pink-500/10 to-purple-500/10 cursor-pointer"
                 style={{
@@ -439,7 +474,7 @@ const LAOSLandingPage = () => {
                 }}
               >
                 <span className="text-sm font-bold tracking-wider">{text}</span>
-              </motion.div>
+              </motion.a>
             ))}
           </motion.div>
         </motion.div>
