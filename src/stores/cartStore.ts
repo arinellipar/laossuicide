@@ -17,10 +17,13 @@
  */
 
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import {
+  persist,
+  createJSONStorage,
+  subscribeWithSelector,
+  devtools,
+} from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
-import { subscribeWithSelector } from "zustand/middleware";
-import { devtools } from "zustand/middleware";
 import type { Product } from "@prisma/client";
 
 // ============= TYPE DEFINITIONS =============
@@ -430,39 +433,75 @@ export const useCartStore = create<CartState>()(
         })),
         {
           name: CART_STORAGE_KEY,
-          storage: createJSONStorage(() => localStorage),
-          // Custom serialization para Map
+          storage: createJSONStorage(() => {
+            // Check if localStorage is available
+            try {
+              if (typeof window !== "undefined" && window.localStorage) {
+                return localStorage;
+              }
+            } catch (error) {
+              console.warn("[CartStore] localStorage not available:", error);
+            }
+            // Fallback to a no-op storage
+            return {
+              getItem: () => null,
+              setItem: () => {},
+              removeItem: () => {},
+            };
+          }),
+          // Custom serialization para Map with error handling
           serialize: (state) => {
-            const cartState = state as unknown as CartState;
-            return JSON.stringify({
-              ...cartState,
-              items: Array.from(cartState.items.entries()),
-            });
+            try {
+              const cartState = state as unknown as CartState;
+              return JSON.stringify({
+                ...cartState,
+                items: Array.from(cartState.items.entries()),
+              });
+            } catch (error) {
+              console.error("[CartStore] Serialization error:", error);
+              return JSON.stringify({ items: [], lastUpdated: Date.now() });
+            }
           },
           deserialize: (str) => {
-            const parsed = JSON.parse(str);
-            return {
-              ...parsed,
-              items: new Map(parsed.items),
-            };
+            try {
+              const parsed = JSON.parse(str);
+              return {
+                ...parsed,
+                items: new Map(parsed.items || []),
+              };
+            } catch (error) {
+              console.error("[CartStore] Deserialization error:", error);
+              return { items: new Map(), lastUpdated: Date.now() };
+            }
           },
           // Partial state persistence
           partialize: (state) => ({
             items: state.items,
             lastUpdated: state.lastUpdated,
           }),
-          // Rehydrate computed properties
+          // Rehydrate computed properties with error handling
           onRehydrateStorage: () => (state) => {
             if (state) {
-              const items = state.items;
-              state.totalItems = Array.from(items.values()).reduce(
-                (sum, item) => sum + item.quantity,
-                0
-              );
-              state.subtotal = calculateSubtotal(items);
-              state.tax = calculateTax(state.subtotal);
-              state.shipping = calculateShipping(state.subtotal);
-              state.total = state.subtotal + state.tax + state.shipping;
+              try {
+                const items = state.items || new Map();
+                state.totalItems = Array.from(items.values()).reduce(
+                  (sum, item) => sum + (item?.quantity || 0),
+                  0
+                );
+                state.subtotal = calculateSubtotal(items);
+                state.tax = calculateTax(state.subtotal);
+                state.shipping = calculateShipping(state.subtotal);
+                state.total = state.subtotal + state.tax + state.shipping;
+              } catch (error) {
+                console.error("[CartStore] Rehydration error:", error);
+                // Reset to safe defaults
+                state.items = new Map();
+                state.totalItems = 0;
+                state.subtotal = 0;
+                state.tax = 0;
+                state.shipping = 0;
+                state.total = 0;
+              }
             }
           },
         }

@@ -56,8 +56,6 @@ function calculateCartSummary(
   };
 }
 
-
-
 // ============= API HANDLERS =============
 
 /**
@@ -91,10 +89,23 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    const summary = calculateCartSummary(items);
+    // Map items to include all required product fields for CartResponse
+    const itemsWithFullProduct = items.map((item) => ({
+      ...item,
+      product: {
+        ...item.product,
+        createdAt: new Date(), // Placeholder, replace with actual value if available
+        updatedAt: new Date(), // Placeholder, replace with actual value if available
+        stripeProductId: "", // Placeholder, replace with actual value if available
+        stripePriceId: "", // Placeholder, replace with actual value if available
+        metadata: {}, // Placeholder, replace with actual value if available
+      },
+    }));
+
+    const summary = calculateCartSummary(itemsWithFullProduct);
 
     const response: CartResponse = {
-      items,
+      items: itemsWithFullProduct,
       summary,
       lastUpdated: new Date(),
     };
@@ -119,23 +130,26 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    console.log('[API] POST /api/cart - Request received');
+    console.log("[API] POST /api/cart - Request received");
 
     const { user } = await validateRequest();
-    console.log('[API] Authentication check:', { authenticated: !!user, userId: user?.id });
+    console.log("[API] Authentication check:", {
+      authenticated: !!user,
+      userId: user?.id,
+    });
 
     if (!user) {
-      console.log('[API] Unauthorized - user not found');
+      console.log("[API] Unauthorized - user not found");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json();
-    console.log('[API] Request body:', body);
+    console.log("[API] Request body:", body);
 
     const validationResult = AddItemSchema.safeParse(body);
 
     if (!validationResult.success) {
-      console.log('[API] Validation failed:', validationResult.error.flatten());
+      console.log("[API] Validation failed:", validationResult.error.flatten());
       return NextResponse.json(
         {
           error: "Validation error",
@@ -145,52 +159,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
-        const { productId, quantity } = validationResult.data;
-        console.log('[API] Adding to cart:', { userId: user.id, productId, quantity });
+    const { productId, quantity } = validationResult.data;
+    console.log("[API] Adding to cart:", {
+      userId: user.id,
+      productId,
+      quantity,
+    });
 
-        // Start transaction to add item to cart
-        const result = await prisma.$transaction(
-          async (tx) => {
-            console.log('[API] Starting database transaction');
+    // Start transaction to add item to cart
+    const result = await prisma.$transaction(async (tx) => {
+      console.log("[API] Starting database transaction");
 
-            // Verificar produto
-            const product = await tx.product.findUnique({
-              where: { id: productId },
-              select: {
-                id: true,
-                name: true,
-                inStock: true,
-                stockQuantity: true,
-                price: true,
-              },
-            });
+      // Verificar produto
+      const product = await tx.product.findUnique({
+        where: { id: productId },
+        select: {
+          id: true,
+          name: true,
+          inStock: true,
+          stockQuantity: true,
+          price: true,
+        },
+      });
 
-            console.log('[API] Product lookup result:', product);
+      console.log("[API] Product lookup result:", product);
 
-            if (!product) {
-              console.log('[API] Product not found:', productId);
-              throw new Error("Product not found");
-            }
-
-            if (!product.inStock) {
-              console.log("[API] Product out of stock:", product);
-              throw new Error("Product out of stock");
-            }
-
-            // Add your logic to add the item to the cart here.
-            // For now, just return a success response as a placeholder.
-            return { message: "Item added to cart (placeholder)" };
-          }
-        );
-
-        return NextResponse.json(result, { status: 200 });
-      } catch (error) {
-        console.error("[CartAPI] POST error:", error);
-        return NextResponse.json(
-          { error: "Internal server error" },
-          { status: 500 }
-        );
+      if (!product) {
+        console.log("[API] Product not found:", productId);
+        throw new Error("Product not found");
       }
+
+      if (!product.inStock) {
+        console.log("[API] Product out of stock:", product);
+        throw new Error("Product out of stock");
+      }
+
+      // Add your logic to add the item to the cart here.
+      // For now, just return a success response as a placeholder.
+      return { message: "Item added to cart (placeholder)" };
+    });
+
+    return NextResponse.json(result, { status: 200 });
+  } catch (error) {
+    console.error("[CartAPI] POST error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
 }
 // ============= DELETE /api/cart/{itemId} =============
 export async function DELETE(
@@ -220,7 +236,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ message: "Item removed from cart" }, { status: 200 });
+    return NextResponse.json(
+      { message: "Item removed from cart" },
+      { status: 200 }
+    );
   } catch (error) {
     console.error("[CartAPI] DELETE error:", error);
     return NextResponse.json(
@@ -228,6 +247,6 @@ export async function DELETE(
       { status: 500 }
     );
   }
-}   
-    
+}
+
 // This file handles the API routes for managing the user's cart, including adding items, retrieving the cart, and deleting items from the cart.
